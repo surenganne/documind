@@ -1,0 +1,86 @@
+name: documind
+
+services:
+  localstack:
+    image: localstack/localstack:3
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: s3
+      DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-documind-local}
+      LOCALSTACK_AUTH_TOKEN: ""
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro
+    networks:
+      - documind
+
+  backend:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8010 --reload
+    volumes:
+      - ../backend:/app
+      - ~/.aws:/root/.aws:ro
+    ports:
+      - "8010:8010"
+    environment:
+      AWS_PROFILE: ${AWS_PROFILE}
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+    depends_on:
+      - localstack
+
+  celery_worker:
+    volumes:
+      - ../backend:/app
+      - ~/.aws:/root/.aws:ro
+    environment:
+      AWS_PROFILE: ${AWS_PROFILE}
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+    depends_on:
+      - localstack
+
+  eval_worker:
+    volumes:
+      - ../backend:/app
+      - ~/.aws:/root/.aws:ro
+    environment:
+      AWS_PROFILE: ${AWS_PROFILE}
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+    depends_on:
+      - localstack
+
+  celery_beat:
+    volumes:
+      - ../backend:/app
+
+  postgres:
+    ports:
+      - "5440:5432"
+
+  redis:
+    ports:
+      - "6380:6379"
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ../frontend:/app
+    command: sh -c "npm install && npm run dev -- --host --port 5180"
+    ports:
+      - "5180:5180"
+    environment:
+      VITE_API_URL: http://localhost:8010/api/v1
+
+  nginx:
+    ports:
+      - "8080:80"
+
+volumes:
+  localstack_data:
