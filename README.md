@@ -2,6 +2,89 @@
 
 DocuMind is an enterprise-grade AI document intelligence platform powered by **PageIndex** — a vectorless, reasoning-based RAG engine. Instead of semantic similarity search, PageIndex builds a hierarchical tree index from uploaded documents and uses LLM reasoning (AWS Bedrock Claude Sonnet 4.5) to navigate to the most relevant sections, returning cited answers with page references and full reasoning traces.
 
+---
+
+## PageIndex vs Traditional RAG
+
+### Traditional RAG (Vector-Based)
+Traditional Retrieval-Augmented Generation systems work by:
+1. **Chunking**: Breaking documents into fixed-size chunks (e.g., 512 tokens)
+2. **Embedding**: Converting each chunk into a vector using embedding models
+3. **Storing**: Saving vectors in a vector database (Pinecone, Weaviate, ChromaDB)
+4. **Retrieval**: Finding chunks with highest cosine similarity to the query
+5. **Generation**: Feeding top-k similar chunks to LLM for answer generation
+
+**Limitations:**
+- ❌ **Context fragmentation**: Important information split across chunks
+- ❌ **Semantic drift**: Similarity ≠ relevance (e.g., "bank" as financial vs riverbank)
+- ❌ **No structure awareness**: Loses document hierarchy, section relationships
+- ❌ **Fixed chunk size**: Too small = missing context, too large = noise
+- ❌ **Black box retrieval**: No explanation of why chunks were selected
+- ❌ **Expensive infrastructure**: Requires vector database, embedding models
+
+### PageIndex (Reasoning-Based)
+PageIndex takes a fundamentally different approach:
+1. **Tree Building**: LLM analyzes document structure and creates hierarchical tree index
+2. **Reasoning Navigation**: LLM reasons about which tree nodes are relevant to the query
+3. **Targeted Retrieval**: Fetches only the specific sections identified by reasoning
+4. **Contextual Generation**: LLM generates answer with full section context and citations
+
+**Advantages:**
+- ✅ **Structure-aware**: Preserves document hierarchy (chapters → sections → subsections)
+- ✅ **Reasoning-driven**: LLM explicitly reasons about relevance, not just similarity
+- ✅ **Full context**: Retrieves complete sections, not fragmented chunks
+- ✅ **Transparent**: Full reasoning trace shows which nodes were visited and why
+- ✅ **No vector DB**: Simpler architecture, lower infrastructure costs
+- ✅ **Better citations**: Exact page numbers, section titles, node IDs
+- ✅ **Multi-document**: Naturally merges trees from multiple documents
+
+### Example Comparison
+
+**Query:** "What is the termination notice period for employees?"
+
+**Traditional RAG:**
+```
+Retrieved chunks:
+1. "...employees must provide notice..."
+2. "...termination procedures include..."
+3. "...notice period varies by..."
+
+Answer: "Based on the retrieved information, employees must provide notice, 
+but the specific period is not clearly stated in these sections."
+```
+
+**PageIndex:**
+```
+Reasoning trace:
+1. Navigate to "Employment Policies" (root node)
+2. Explore "Termination Procedures" (depth 2)
+3. Select "Notice Requirements" (depth 3)
+
+Retrieved section: "Section 4.2 — Notice Requirements
+All employees must provide a minimum of 30 days written notice..."
+
+Answer: "According to Section 4.2 (Notice Requirements) on page 12, 
+employees must provide a minimum of 30 days written notice before termination."
+```
+
+### When to Use PageIndex vs Traditional RAG
+
+**Use PageIndex when:**
+- Documents have clear hierarchical structure (contracts, policies, manuals)
+- You need precise citations with page numbers and section references
+- Transparency and explainability are critical
+- You want to minimize infrastructure complexity
+- Documents are long-form and well-organized
+
+**Use Traditional RAG when:**
+- Documents are unstructured (emails, chat logs, social media)
+- You need sub-second latency (vector search is faster than LLM reasoning)
+- Documents are very short or lack clear structure
+- You're working with massive document collections (millions of docs)
+- Semantic similarity is more important than structural reasoning
+
+---
+
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) ≥ 24 with Docker Compose v2
