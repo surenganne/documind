@@ -65,40 +65,53 @@ export function Chat() {
       <SectionJumper docId={jumpDoc} page={jumpPage} />
 
       {/* Left panel — 280px */}
-      <aside className="w-[280px] shrink-0 flex flex-col border-r border-slate-200 bg-[var(--dm-surface)]">
+      <aside className="w-[280px] shrink-0 flex flex-col border-r border-slate-200 bg-slate-50">
         {/* KB selector */}
-        <div className="border-b border-slate-200 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Knowledge Base</p>
-          <div className="flex flex-col gap-1">
-            {knowledgeBases.map((kb) => (
-              <button
-                key={kb.id}
-                onClick={() => handleNewSession(kb.id)}
-                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-[var(--dm-primary-light)] transition-colors"
-              >
-                <BookOpen className="h-3.5 w-3.5 text-[var(--dm-primary)]" />
-                {kb.name}
-              </button>
-            ))}
+        <div className="border-b border-slate-200 p-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Knowledge Base</p>
+          <div className="flex flex-col gap-1.5">
+            {knowledgeBases.map((kb) => {
+              const isActive = activeSession?.kb_id === kb.id;
+              return (
+                <button
+                  key={kb.id}
+                  onClick={() => handleNewSession(kb.id)}
+                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-all ${
+                    isActive
+                      ? 'bg-[var(--dm-primary)] text-white shadow-md ring-2 ring-blue-100'
+                      : 'text-slate-700 hover:bg-white hover:shadow-sm'
+                  }`}
+                >
+                  <div className={`flex h-7 w-7 items-center justify-center rounded-md ${
+                    isActive ? 'bg-white/20' : 'bg-blue-50'
+                  }`}>
+                    <BookOpen className={`h-4 w-4 ${
+                      isActive ? 'text-white' : 'text-[var(--dm-primary)]'
+                    }`} />
+                  </div>
+                  <span className="font-medium">{kb.name}</span>
+                </button>
+              );
+            })}
             {knowledgeBases.length === 0 && (
-              <p className="text-xs text-slate-400 px-2">No knowledge bases. Create one first.</p>
+              <p className="text-xs text-slate-500 px-3">No knowledge bases. Create one first.</p>
             )}
           </div>
         </div>
 
         {/* Document library for active KB */}
         {activeSession && (
-          <div className="border-b border-slate-200 p-3 flex-1 overflow-y-auto">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Documents</p>
+          <div className="border-b border-slate-200 p-4 flex-1 overflow-y-auto">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Documents</p>
             <div className="flex flex-col gap-1">
               {kbDocuments.map((doc) => (
                 <button
                   key={doc.id}
                   onClick={() => handleCitationClick(doc.id, 1)}
-                  className="flex items-center gap-1.5 truncate rounded px-2 py-1 text-left text-xs text-slate-600 hover:bg-[var(--dm-primary-light)] transition-colors"
+                  className="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-white hover:shadow-sm transition-all"
                 >
-                  <FileText className="h-3 w-3 shrink-0 text-[var(--dm-primary)]" />
-                  <span className="truncate">{doc.filename}</span>
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--dm-primary)]" />
+                  <span className="truncate font-medium">{doc.filename}</span>
                 </button>
               ))}
             </div>
@@ -106,37 +119,44 @@ export function Chat() {
         )}
 
         {/* Session navigator */}
-        <div className="p-3 overflow-y-auto">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Sessions</p>
+        <div className="p-4 overflow-y-auto">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Sessions</p>
           <div className="flex flex-col gap-1">
-            {sessions.map((s) => (
-              <div
-                key={s.id}
-                className={`group flex items-center gap-1 rounded-lg transition-colors ${
-                  s.id === activeSessionId
-                    ? 'bg-[var(--dm-primary-light)]'
-                    : 'hover:bg-slate-100'
-                }`}
-              >
-                <button
-                  onClick={() => setActiveSession(s.id)}
-                  className={`flex-1 truncate px-2 py-1.5 text-left text-xs transition-colors ${
-                    s.id === activeSessionId
-                      ? 'text-[var(--dm-primary)] font-medium'
-                      : 'text-slate-600'
+            {sessions.map((s) => {
+              const isActive = s.id === activeSessionId;
+              return (
+                <div
+                  key={s.id}
+                  className={`group flex items-center gap-1 rounded-lg transition-all ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-50 to-blue-100 shadow-sm ring-2 ring-blue-200'
+                      : 'hover:bg-white hover:shadow-sm'
                   }`}
                 >
-                  {s.title || 'Untitled session'}
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
-                  className="mr-1 rounded p-1 text-slate-300 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 transition-all"
-                  aria-label="Delete session"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
+                  <button
+                    onClick={() => setActiveSession(s.id)}
+                    className={`flex-1 truncate px-3 py-2 text-left text-xs transition-colors ${
+                      isActive
+                        ? 'text-[var(--dm-primary)] font-bold'
+                        : 'text-slate-700 font-medium'
+                    }`}
+                  >
+                    {s.title || 'Untitled session'}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+                    className={`mr-2 rounded p-1 transition-all ${
+                      isActive
+                        ? 'text-slate-500 hover:text-red-600 hover:bg-red-50'
+                        : 'text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-600 hover:bg-red-50'
+                    }`}
+                    aria-label="Delete session"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </aside>
@@ -144,12 +164,32 @@ export function Chat() {
       {/* Center panel — flex */}
       <main className="flex flex-1 flex-col min-w-0">
         {!activeSessionId ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 text-slate-400">
-            <Plus className="h-10 w-10" />
-            <p className="text-sm">Select a knowledge base on the left to start a new session</p>
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 text-slate-500">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+              <Plus className="h-8 w-8 text-slate-400" />
+            </div>
+            <p className="text-sm font-medium">Select a knowledge base on the left to start a new session</p>
           </div>
         ) : (
           <>
+            {/* Active KB header */}
+            <div className="border-b border-slate-200 bg-white px-6 py-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+                  <BookOpen className="h-4 w-4 text-[var(--dm-primary)]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-slate-500 font-medium">Active Knowledge Base</p>
+                  <p className="text-sm font-semibold text-slate-900 truncate">
+                    {knowledgeBases.find((kb) => kb.id === activeSession?.kb_id)?.name || 'Unknown KB'}
+                  </p>
+                </div>
+                <div className="text-xs text-slate-400 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
+                  {kbDocuments.length} {kbDocuments.length === 1 ? 'document' : 'documents'}
+                </div>
+              </div>
+            </div>
+
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
               {messages.map((msg) => (
@@ -176,8 +216,8 @@ export function Chat() {
             </div>
 
             {/* Input */}
-            <div className="border-t border-slate-200 p-4">
-              <div className="flex items-end gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-[var(--dm-primary)]">
+            <div className="border-t border-slate-200 bg-white p-4">
+              <div className="flex items-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:border-[var(--dm-primary)] focus-within:ring-2 focus-within:ring-blue-100 transition-all">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -189,13 +229,13 @@ export function Chat() {
                   }}
                   placeholder="Ask a question about your documents…"
                   rows={1}
-                  className="flex-1 resize-none bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                  className="flex-1 resize-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
                   aria-label="Chat input"
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || isStreaming}
-                  className="rounded-lg bg-[var(--dm-primary)] p-1.5 text-white hover:bg-[var(--dm-primary-dark)] disabled:opacity-40 transition-colors"
+                  className="rounded-lg bg-[var(--dm-primary)] p-2 text-white hover:bg-[var(--dm-primary-dark)] disabled:opacity-40 transition-colors shadow-sm"
                   aria-label="Send message"
                 >
                   <Send className="h-4 w-4" />
@@ -235,16 +275,13 @@ export function Chat() {
               aria-label="PDF viewer"
             >
               {/* Drawer header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0 bg-[var(--dm-surface)]">
-                <span
-                  className="text-sm font-semibold text-slate-700"
-                  style={{ fontFamily: "'Playfair Display', serif" }}
-                >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0 bg-slate-50">
+                <span className="text-sm font-semibold text-slate-900">
                   Document Viewer
                 </span>
                 <button
                   onClick={() => setPdfDrawerOpen(false)}
-                  className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dm-primary)]"
+                  className="rounded-lg p-2 text-slate-400 hover:text-slate-700 hover:bg-white transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dm-primary)]"
                   aria-label="Close PDF viewer"
                 >
                   <X className="h-4 w-4" />

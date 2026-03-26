@@ -217,7 +217,7 @@ async def _check_baseline_and_alert(db, cutoff: datetime) -> int:
 )
 def cleanup_orphaned_files() -> dict:
     """
-    Purge orphaned files older than 30 days from storage.
+    Purge orphaned files older than 30 days from S3.
     A file is orphaned if it has no corresponding documents record.
     """
     return _run_async(_cleanup_orphaned_files_async())
@@ -227,41 +227,16 @@ async def _cleanup_orphaned_files_async() -> dict:
     from sqlalchemy import select
     from app.core.database import AsyncSessionLocal
     from app.models.document import Document
-    from app.core.config import settings
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-    deleted_count = 0
 
     async with AsyncSessionLocal() as db:
         # Get all known file paths from DB
         result = await db.execute(select(Document.file_path))
         known_paths: set[str] = {row[0] for row in result.all() if row[0]}
 
-    # Clean up local storage
-    local_root = Path(settings.s3_local_fallback_path)
-    if local_root.exists():
-        for file_path in local_root.rglob("*"):
-            if not file_path.is_file():
-                continue
-            # Check age
-            mtime = datetime.fromtimestamp(file_path.stat().st_mtime, tz=timezone.utc)
-            if mtime >= cutoff:
-                continue
-            # Check if orphaned
-            if str(file_path) not in known_paths:
-                try:
-                    file_path.unlink()
-                    deleted_count += 1
-                    logger.info("Deleted orphaned file", extra={"path": str(file_path)})
-                except OSError as exc:
-                    logger.warning(
-                        "Failed to delete orphaned file",
-                        extra={"path": str(file_path), "error": str(exc)},
-                    )
-
-    # S3 cleanup (if configured)
-    if settings.s3_bucket:
-        deleted_count += await _cleanup_s3_orphans(known_paths, cutoff)
+    # S3 cleanup
+    deleted_count = await _cleanup_s3_orphans(known_paths, cutoff)
 
     logger.info("File cleanup complete", extra={"deleted": deleted_count})
     return {"deleted": deleted_count}

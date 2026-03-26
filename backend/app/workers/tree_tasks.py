@@ -17,8 +17,8 @@ from app.services.llm.bedrock import BedrockProvider
 
 logger = logging.getLogger(__name__)
 
-# Bedrock model IDs
-_CLAUDE_MODEL = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+# Bedrock model IDs - using cross-region inference profile for us-east-1
+_CLAUDE_MODEL = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 
 # Retry policy: 2^attempt * 10s → 10s, 20s, 40s
 _MAX_RETRIES = 3
@@ -99,12 +99,9 @@ async def _build_tree_async(document_id: str) -> dict:
             # Extract text
             text = extract_text(doc.file_path, doc.file_type)
 
-            # Build tree via LLM
+            # Build tree and insights in a single LLM call (faster!)
             provider = BedrockProvider(model=_CLAUDE_MODEL)
-            tree_json = await _generate_tree(provider, text, doc.filename)
-
-            # Generate auto-insights
-            insights = await _generate_insights(provider, text, doc.filename)
+            tree_json, insights = await _generate_tree_and_insights(provider, text, doc.filename)
 
             # Persist tree
             existing = await db.execute(
@@ -138,6 +135,63 @@ async def _build_tree_async(document_id: str) -> dict:
 
     logger.info("Document tree built successfully", extra={"document_id": document_id})
     return {"document_id": document_id, "status": "ready"}
+
+
+async def _generate_tree_and_insights(provider, text: str, filename: str) -> tuple[dict, dict]:
+    """
+    Generate both tree structure and insights in a single LLM call for better performance.
+    Returns (tree_json, insights_dict).
+    """
+    system_prompt = (
+        "You are a document analysis assistant. Analyze the document and return a JSON object with two keys:\n"
+        "1. 'tree': hierarchical structure with nodes (node_id, title, page_start, page_end, depth, text, children)\n"
+        "2. 'insights': object with executive_summary (string), key_entities (object with people/organizations/dates/amounts arrays), "
+        "document_tags (array), complexity_score (float 0.0-1.0)\n"
+        "Return ONLY valid JSON, no explanation."
+    )
+    
+    messages = [
+        {
+            "role": "user",
+            "content": f"Document: {filename}\n\n{text[:8000]}",  # truncate for token limits
+        }
+    ]
+
+    try:
+        response = await provider.complete(messages, system_prompt=system_prompt)
+        
+        # Parse JSON from LLM response
+        content = response.content.strip()
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        
+        combined_data = json.loads(content)
+        
+        # Extract tree and insights
+        tree_data = combined_data.get("tree", {})
+        insights_raw = combined_data.get("insights", {})
+        
+        # Validate tree structure
+        if not tree_data or "nodes" not in tree_data:
+            raise ValueError("Invalid tree structure")
+        
+        insights = {
+            "executive_summary": insights_raw.get("executive_summary", f"Summary of {filename}"),
+            "key_entities": insights_raw.get("key_entities", {"people": [], "organizations": [], "dates": [], "amounts": []}),
+            "document_tags": insights_raw.get("document_tags", ["General"]),
+            "complexity_score": float(insights_raw.get("complexity_score", 0.5)),
+        }
+        
+        return tree_data, insights
+        
+    except Exception as exc:
+        logger.warning("Combined generation failed, using fallback", extra={"error": str(exc)})
+        # Fallback to separate calls
+        tree_data = await _generate_tree(provider, text, filename)
+        insights = await _generate_insights(provider, text, filename)
+        return tree_data, insights
 
 
 async def _generate_tree(provider, text: str, filename: str) -> dict:

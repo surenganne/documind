@@ -44,5 +44,20 @@ export async function getKnowledgeBases(): Promise<KnowledgeBase[]> {
 }
 
 export async function deleteKnowledgeBase(kb_id: string): Promise<void> {
-  await apiClient.delete(`/knowledge-bases/${kb_id}`);
+  console.log('deleteKnowledgeBase API call:', kb_id);
+  try {
+    const response = await apiClient.delete(`/knowledge-bases/${kb_id}`);
+    console.log('deleteKnowledgeBase response:', response.status, response.data);
+  } catch (error) {
+    console.error('deleteKnowledgeBase API error:', error);
+    throw error;
+  }
+}
+
+export async function updateKnowledgeBase(
+  kb_id: string,
+  updates: { name?: string; description?: string }
+): Promise<KnowledgeBase> {
+  const { data } = await apiClient.patch<KnowledgeBase>(`/knowledge-bases/${kb_id}`, updates);
+  return data;
 }

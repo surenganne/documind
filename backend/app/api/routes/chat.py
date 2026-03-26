@@ -27,6 +27,7 @@ from app.services.llm.bedrock import BedrockProvider
 from app.services.pageindex.answer_generator import generate_answer, stream_answer
 from app.services.pageindex.trace_logger import build_trace
 from app.services.pageindex.tree_navigator import navigate
+from app.workers.eval_tasks import evaluate_response_async
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +250,12 @@ async def send_message(
     await db.commit()
     await db.refresh(assistant_msg)
 
+    # Trigger async evaluation (non-blocking)
+    evaluate_response_async.apply_async(
+        args=[str(assistant_msg.id), str(current_user.workspace_id)],
+        kwargs={"triggered_by": "online"},
+    )
+
     logger.info(
         "Chat message processed",
         extra={"session_id": str(session_id), "nodes_visited": len(trace.node_ids)},
@@ -332,16 +339,22 @@ async def _ws_stream_answer(
     # Send trace event first
     await websocket.send_json({"type": "trace", "data": trace.to_dict()})
 
-    # Stream answer tokens
+    # Collect full response first, then parse and stream clean tokens
     full_content = ""
     async for chunk in stream_answer(query, nav_result.selected_node_ids, trees, history, llm):
         full_content += chunk
-        await websocket.send_json({"type": "token", "data": chunk})
 
-    # Parse final answer for citations
+    # Parse to extract clean answer and citations
     from app.services.pageindex.answer_generator import _parse_answer_and_citations
     answer_text, citations = _parse_answer_and_citations(full_content)
 
+    # Stream the cleaned answer text in small chunks for better UX
+    chunk_size = 5  # characters per chunk
+    for i in range(0, len(answer_text), chunk_size):
+        chunk = answer_text[i:i + chunk_size]
+        await websocket.send_json({"type": "token", "data": chunk})
+
+    # Send done event with citations
     await websocket.send_json({
         "type": "done",
         "citations": [c.to_dict() for c in citations],
@@ -423,6 +436,13 @@ async def websocket_chat(
             db.add(assistant_msg)
             await _add_audit_log(db, user.id, "chat.query", "chat_session", session_id)
             await db.commit()
+            await db.refresh(assistant_msg)
+
+            # Trigger async evaluation (non-blocking)
+            evaluate_response_async.apply_async(
+                args=[str(assistant_msg.id), str(user.workspace_id)],
+                kwargs={"triggered_by": "online"},
+            )
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected", extra={"session_id": str(session_id)})

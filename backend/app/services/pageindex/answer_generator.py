@@ -122,7 +122,7 @@ def _parse_answer_and_citations(content: str) -> tuple[str, list[Citation]]:
         start = content.index("<answer>") + len("<answer>")
         end = content.index("</answer>")
         answer_text = content[start:end].strip()
-
+    
     # Extract citations block
     if "<citations>" in content and "</citations>" in content:
         start = content.index("<citations>") + len("<citations>")
@@ -143,10 +143,24 @@ def _parse_answer_and_citations(content: str) -> tuple[str, list[Citation]]:
                         verbatim_excerpt=c["verbatim_excerpt"],
                         doc_id=doc_id,
                     ))
-        except (json.JSONDecodeError, ValueError, TypeError):
-            logger.warning("Failed to parse citations from LLM response")
-
-    return answer_text, citations
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            logger.warning(f"Failed to parse citations from LLM response: {e}")
+    
+    # Clean up any remaining XML-like tags from the answer text
+    # Remove <answer> and </answer> tags if they're still in the text
+    answer_text = answer_text.replace("<answer>", "").replace("</answer>", "")
+    
+    # Remove the entire <citations>...</citations> block if it's still in the answer
+    if "<citations>" in answer_text and "</citations>" in answer_text:
+        cit_start = answer_text.index("<citations>")
+        cit_end = answer_text.index("</citations>") + len("</citations>")
+        answer_text = answer_text[:cit_start] + answer_text[cit_end:]
+    
+    # Clean up [citation:N] markers - replace with superscript numbers
+    import re
+    answer_text = re.sub(r'\[citation:(\d+)\]', r'[\1]', answer_text)
+    
+    return answer_text.strip(), citations
 
 
 async def generate_answer(

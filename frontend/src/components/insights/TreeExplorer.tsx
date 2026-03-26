@@ -82,13 +82,13 @@ function TreeNodeRow({ node, selectedId, onSelect }: TreeNodeRowProps) {
       <button
         onClick={handleSelect}
         className={[
-          'w-full flex items-center gap-2 px-3 py-2 text-left text-sm rounded-lg transition-colors',
+          'w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm rounded-lg transition-all',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dm-primary)]',
           isSelected
-            ? 'bg-[var(--dm-primary-light)] text-[var(--dm-primary-dark)] font-medium'
-            : 'text-slate-700 hover:bg-slate-100',
+            ? 'bg-blue-50 text-[var(--dm-primary)] font-semibold shadow-sm'
+            : 'text-slate-700 hover:bg-white hover:shadow-sm',
         ].join(' ')}
-        style={{ paddingLeft: `${indent + 12}px` }}
+        style={{ paddingLeft: `${indent + 16}px` }}
         aria-expanded={hasChildren ? open : undefined}
         aria-selected={isSelected}
       >
@@ -101,14 +101,14 @@ function TreeNodeRow({ node, selectedId, onSelect }: TreeNodeRowProps) {
           tabIndex={-1}
         >
           {hasChildren ? (
-            open ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+            open ? <ChevronDown size={16} /> : <ChevronRight size={16} />
           ) : (
-            <span className="w-[14px] inline-block" />
+            <span className="w-[16px] inline-block" />
           )}
         </span>
 
         {/* depth icon */}
-        <span className={isSelected ? 'text-[var(--dm-primary)]' : 'text-slate-400'}>
+        <span className={isSelected ? 'text-[var(--dm-primary)]' : 'text-slate-500'}>
           {depthIcon(node.depth)}
         </span>
 
@@ -116,7 +116,7 @@ function TreeNodeRow({ node, selectedId, onSelect }: TreeNodeRowProps) {
         <span className="truncate flex-1">{node.title}</span>
 
         {/* page range badge */}
-        <span className="shrink-0 text-xs text-slate-400 tabular-nums">
+        <span className={`shrink-0 text-xs tabular-nums ${isSelected ? 'text-blue-600' : 'text-slate-500'}`}>
           p.{node.page_start}–{node.page_end}
         </span>
       </button>
@@ -160,19 +160,19 @@ function Breadcrumb({ path, onNavigate }: BreadcrumbProps) {
   return (
     <nav
       aria-label="Tree breadcrumb"
-      className="flex items-center flex-wrap gap-1 text-xs text-slate-500 px-4 py-2 border-b border-slate-100 bg-[var(--dm-surface)]"
+      className="flex items-center flex-wrap gap-1 text-xs text-slate-500 px-5 py-3 border-b border-slate-200 bg-slate-50"
     >
-      <span className="text-slate-400">Root</span>
+      <span className="text-slate-500 font-medium">Root</span>
       {path.map((node, i) => (
         <span key={node.node_id} className="flex items-center gap-1">
-          <ChevronRight size={12} className="text-slate-300 shrink-0" />
+          <ChevronRight size={12} className="text-slate-400 shrink-0" />
           <button
             onClick={() => onNavigate(node)}
             className={[
               'hover:text-[var(--dm-primary)] transition-colors focus:outline-none focus-visible:underline',
               i === path.length - 1
-                ? 'text-[var(--dm-primary)] font-medium'
-                : 'text-slate-500',
+                ? 'text-[var(--dm-primary)] font-semibold'
+                : 'text-slate-600',
             ].join(' ')}
           >
             {node.title}
@@ -193,8 +193,10 @@ function PreviewPanel({ node }: PreviewPanelProps) {
   if (!node) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3 p-8">
-        <FileText size={40} strokeWidth={1.2} />
-        <p className="text-sm text-center">Select a node to preview its section text</p>
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+          <FileText size={32} strokeWidth={1.5} className="text-slate-400" />
+        </div>
+        <p className="text-sm text-center text-slate-500">Select a node to preview its section text</p>
       </div>
     );
   }
@@ -208,19 +210,19 @@ function PreviewPanel({ node }: PreviewPanelProps) {
       className="flex flex-col h-full overflow-hidden"
     >
       {/* header */}
-      <div className="px-5 py-4 border-b border-slate-100 bg-white">
-        <h3 className="font-semibold text-slate-800 text-base leading-snug">{node.title}</h3>
-        <p className="text-xs text-slate-400 mt-1">
+      <div className="px-6 py-4 border-b border-slate-200 bg-white">
+        <h3 className="font-semibold text-slate-900 text-base leading-snug">{node.title}</h3>
+        <p className="text-xs text-slate-500 mt-1.5">
           Pages {node.page_start}–{node.page_end} · Depth {node.depth}
         </p>
       </div>
 
       {/* body */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto px-6 py-5">
         {node.text ? (
           <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{node.text}</p>
         ) : (
-          <p className="text-sm text-slate-400 italic">No text available for this section.</p>
+          <p className="text-sm text-slate-500 italic">No text available for this section.</p>
         )}
       </div>
     </motion.div>
@@ -241,20 +243,11 @@ export function TreeExplorer({ treeJson, docTitle }: TreeExplorerProps) {
   }, []);
 
   return (
-    <div
-      className="flex flex-col h-full rounded-xl border border-slate-200 overflow-hidden bg-white"
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
-    >
+    <div className="flex flex-col h-full rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
       {/* top bar */}
-      <div
-        className="flex items-center gap-3 px-4 py-3 border-b border-slate-200"
-        style={{ background: 'var(--dm-primary)' }}
-      >
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200 bg-[var(--dm-primary)]">
         <BookOpen size={18} className="text-white shrink-0" />
-        <h2
-          className="text-white font-semibold text-sm truncate"
-          style={{ fontFamily: "'Playfair Display', serif" }}
-        >
+        <h2 className="text-white font-semibold text-sm truncate">
           {docTitle ?? treeJson.title}
         </h2>
       </div>
@@ -265,9 +258,9 @@ export function TreeExplorer({ treeJson, docTitle }: TreeExplorerProps) {
       {/* body: tree + preview */}
       <div className="flex flex-1 overflow-hidden">
         {/* tree panel */}
-        <div className="w-72 shrink-0 border-r border-slate-100 overflow-y-auto py-2 bg-[var(--dm-surface)]">
+        <div className="w-80 shrink-0 border-r border-slate-200 overflow-y-auto py-3 bg-slate-50">
           {(treeJson.nodes ?? []).length === 0 ? (
-            <p className="text-xs text-slate-400 px-4 py-3">No nodes in this tree.</p>
+            <p className="text-xs text-slate-500 px-4 py-3">No nodes in this tree.</p>
           ) : (
             (treeJson.nodes ?? []).map((node) => (
               <TreeNodeRow

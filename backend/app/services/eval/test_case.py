@@ -123,13 +123,22 @@ async def build_test_case(message_id: str | uuid.UUID, db_session: Any) -> Any:
                 retrieval_context.append(text)
 
     try:
-        from deepeval.test_case import LLMTestCase
+        import sys
+        if sys.version_info >= (3, 10):
+            from deepeval.test_case import LLMTestCase
 
-        return LLMTestCase(
-            input=user_query,
-            actual_output=assistant_msg.content,
-            retrieval_context=retrieval_context if retrieval_context else [""],
-        )
+            return LLMTestCase(
+                input=user_query,
+                actual_output=assistant_msg.content,
+                retrieval_context=retrieval_context if retrieval_context else [""],
+            )
+        else:
+            # Python < 3.10 - return dict instead
+            return {
+                "input": user_query,
+                "actual_output": assistant_msg.content,
+                "retrieval_context": retrieval_context if retrieval_context else [""],
+            }
     except ImportError:
         # Return a plain dict when deepeval is not installed
         return {

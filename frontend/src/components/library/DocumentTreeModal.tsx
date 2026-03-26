@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { fetchDocumentInsights } from '../../api/insights';
 import type { Document } from '../../types';
+import { DocumentSummary } from '../insights/DocumentSummary';
 import { TreeExplorer, type TreeJson, type TreeNode } from '../insights/TreeExplorer';
 
 interface DocumentTreeModalProps {
@@ -12,7 +13,7 @@ interface DocumentTreeModalProps {
 
 function SkeletonLoader() {
   return (
-    <div className="flex flex-col gap-3 p-4 animate-pulse">
+    <div className="flex flex-col gap-3 p-6 animate-pulse">
       <div className="h-4 bg-slate-200 rounded w-3/4" />
       <div className="h-4 bg-slate-200 rounded w-1/2" />
       <div className="h-4 bg-slate-200 rounded w-2/3" />
@@ -34,6 +35,7 @@ export function DocumentTreeModal({ document, onClose }: DocumentTreeModalProps)
   const [treeJson, setTreeJson] = useState<TreeJson | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'tree' | 'insights'>('tree');
 
   useEffect(() => {
     if (!document) return;
@@ -116,28 +118,43 @@ export function DocumentTreeModal({ document, onClose }: DocumentTreeModalProps)
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 h-full w-full max-w-3xl z-50 flex flex-col bg-white shadow-2xl"
+            className="fixed right-0 top-0 h-full w-full max-w-3xl z-50 flex flex-col bg-white shadow-2xl border-l border-slate-200"
             role="dialog"
             aria-modal="true"
             aria-label={`Document tree: ${document.filename}`}
           >
             {/* Header */}
-            <div
-              className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0"
-              style={{ background: 'var(--dm-surface)' }}
-            >
-              <div className="flex flex-col min-w-0">
-                <h2
-                  className="font-semibold text-slate-800 truncate text-base"
-                  style={{ fontFamily: "'Playfair Display', serif" }}
-                >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0 bg-slate-50">
+              <div className="flex flex-col min-w-0 flex-1">
+                <h2 className="font-semibold text-slate-900 truncate text-base">
                   {document.filename}
                 </h2>
-                <p className="text-xs text-slate-400 mt-0.5">PageIndex Tree View</p>
+                <div className="flex items-center gap-3 mt-2">
+                  <button
+                    onClick={() => setActiveTab('tree')}
+                    className={`text-sm font-medium pb-1 border-b-2 transition-colors ${
+                      activeTab === 'tree'
+                        ? 'text-[var(--dm-primary)] border-[var(--dm-primary)]'
+                        : 'text-slate-500 border-transparent hover:text-slate-700'
+                    }`}
+                  >
+                    Tree View
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('insights')}
+                    className={`text-sm font-medium pb-1 border-b-2 transition-colors ${
+                      activeTab === 'insights'
+                        ? 'text-[var(--dm-primary)] border-[var(--dm-primary)]'
+                        : 'text-slate-500 border-transparent hover:text-slate-700'
+                    }`}
+                  >
+                    Insights
+                  </button>
+                </div>
               </div>
               <button
                 onClick={onClose}
-                className="ml-4 shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dm-primary)]"
+                className="ml-4 shrink-0 p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dm-primary)] shadow-sm"
                 aria-label="Close tree viewer"
               >
                 <X size={18} />
@@ -148,8 +165,13 @@ export function DocumentTreeModal({ document, onClose }: DocumentTreeModalProps)
             <div className="flex-1 overflow-hidden">
               {loading && <SkeletonLoader />}
               {error && <ErrorState message={error} />}
-              {!loading && !error && treeJson && (
+              {!loading && !error && activeTab === 'tree' && treeJson && (
                 <TreeExplorer treeJson={treeJson} docTitle={document.filename} />
+              )}
+              {!loading && !error && activeTab === 'insights' && (
+                <div className="h-full overflow-y-auto p-6">
+                  <DocumentSummary docId={document.id} />
+                </div>
               )}
             </div>
           </motion.div>

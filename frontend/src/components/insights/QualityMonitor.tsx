@@ -45,51 +45,27 @@ interface DistributionData {
   hallucination: number[];
 }
 
-// ── Mock data fallbacks ────────────────────────────────────────────────────────
+// ── Empty data fallbacks ──────────────────────────────────────────────────────
 
-function mockTrend(): TrendData {
-  const dates: string[] = [];
-  const faithfulness: number[] = [];
-  const now = new Date();
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    dates.push(d.toISOString().slice(0, 10));
-    faithfulness.push(0.72 + Math.random() * 0.22);
-  }
-  return { dates, faithfulness };
+function emptyTrend(): TrendData {
+  return { dates: [], faithfulness: [] };
 }
 
-function mockHeatmap(): HeatmapData {
-  return {
-    documents: [
-      { doc_id: '1', filename: 'Contract_v3.pdf', avg_faithfulness: 0.91, avg_relevancy: 0.88, avg_hallucination: 0.05 },
-      { doc_id: '2', filename: 'Annual_Report.pdf', avg_faithfulness: 0.74, avg_relevancy: 0.79, avg_hallucination: 0.18 },
-      { doc_id: '3', filename: 'HR_Policy.docx', avg_faithfulness: 0.62, avg_relevancy: 0.65, avg_hallucination: 0.28 },
-      { doc_id: '4', filename: 'Technical_Spec.md', avg_faithfulness: 0.88, avg_relevancy: 0.92, avg_hallucination: 0.08 },
-    ],
-  };
+function emptyHeatmap(): HeatmapData {
+  return { documents: [] };
 }
 
-function mockLowScores(): LowScoresData {
-  return {
-    messages: [
-      { message_id: 'm1', session_id: 's1', content_preview: 'What are the termination clauses?', faithfulness_score: 0.61, evaluated_at: new Date(Date.now() - 3600000).toISOString() },
-      { message_id: 'm2', session_id: 's2', content_preview: 'Summarize the financial highlights.', faithfulness_score: 0.58, evaluated_at: new Date(Date.now() - 7200000).toISOString() },
-      { message_id: 'm3', session_id: 's1', content_preview: 'Who are the key stakeholders?', faithfulness_score: 0.72, evaluated_at: new Date(Date.now() - 10800000).toISOString() },
-    ],
-  };
+function emptyLowScores(): LowScoresData {
+  return { messages: [] };
 }
 
-function mockDistribution(): DistributionData {
-  const gen = (mean: number) =>
-    Array.from({ length: 40 }, () => Math.max(0, Math.min(1, mean + (Math.random() - 0.5) * 0.4)));
+function emptyDistribution(): DistributionData {
   return {
-    faithfulness: gen(0.82),
-    answer_relevancy: gen(0.78),
-    contextual_precision: gen(0.75),
-    contextual_recall: gen(0.73),
-    hallucination: gen(0.12),
+    faithfulness: [],
+    answer_relevancy: [],
+    contextual_precision: [],
+    contextual_recall: [],
+    hallucination: [],
   };
 }
 
@@ -246,9 +222,15 @@ function Heatmap({ documents }: { documents: HeatmapDoc[] }) {
 
 function LowScoreList({ messages, threshold }: { messages: LowScoreMessage[]; threshold: number }) {
   if (!messages.length) return <p className="text-sm text-slate-400 py-4">No messages below the faithfulness threshold.</p>;
+  
+  // Deduplicate messages by message_id (in case backend returns duplicates)
+  const uniqueMessages = Array.from(
+    new Map(messages.map(msg => [msg.message_id, msg])).values()
+  );
+  
   return (
     <ul className="space-y-2" aria-label="Low-score messages">
-      {messages.map((msg) => {
+      {uniqueMessages.map((msg) => {
         const color = scoreColor(msg.faithfulness_score);
         return (
           <li key={msg.message_id} className="flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
@@ -307,9 +289,9 @@ function Histogram({ scores, label, invert = false }: { scores: number[]; label:
 
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="px-5 py-3 border-b border-slate-100" style={{ background: 'var(--dm-surface)' }}>
-        <h3 className="text-sm font-semibold text-slate-700" style={{ fontFamily: "'Playfair Display', serif" }}>{title}</h3>
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+      <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50">
+        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
       </div>
       <div className="px-5 py-4">{children}</div>
     </div>
@@ -333,6 +315,7 @@ export function QualityMonitor({ workspaceId: _workspaceId, faithfulnessThreshol
   const [distribution, setDistribution] = useState<DistributionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasRealData, setHasRealData] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -346,14 +329,27 @@ export function QualityMonitor({ workspaceId: _workspaceId, faithfulnessThreshol
           apiClient.get<DistributionData>('/eval/analytics/distribution'),
         ]);
         if (cancelled) return;
-        setTrend(trendRes.status === 'fulfilled' ? trendRes.value.data : mockTrend());
-        setHeatmap(heatmapRes.status === 'fulfilled' ? heatmapRes.value.data : mockHeatmap());
-        setLowScores(lowRes.status === 'fulfilled' ? lowRes.value.data : mockLowScores());
-        setDistribution(distRes.status === 'fulfilled' ? distRes.value.data : mockDistribution());
+        
+        const hasData = 
+          (trendRes.status === 'fulfilled' && trendRes.value.data.dates.length > 0) ||
+          (heatmapRes.status === 'fulfilled' && heatmapRes.value.data.documents.length > 0) ||
+          (lowRes.status === 'fulfilled' && lowRes.value.data.messages.length > 0) ||
+          (distRes.status === 'fulfilled' && distRes.value.data.faithfulness.length > 0);
+        
+        setHasRealData(hasData);
+        
+        if (!hasData) {
+          setError('No evaluation data found. Ask questions in Chat to generate quality metrics.');
+        }
+        
+        setTrend(trendRes.status === 'fulfilled' ? trendRes.value.data : emptyTrend());
+        setHeatmap(heatmapRes.status === 'fulfilled' ? heatmapRes.value.data : emptyHeatmap());
+        setLowScores(lowRes.status === 'fulfilled' ? lowRes.value.data : emptyLowScores());
+        setDistribution(distRes.status === 'fulfilled' ? distRes.value.data : emptyDistribution());
       } catch (err: unknown) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load quality data.');
-          setTrend(mockTrend()); setHeatmap(mockHeatmap()); setLowScores(mockLowScores()); setDistribution(mockDistribution());
+          setTrend(emptyTrend()); setHeatmap(emptyHeatmap()); setLowScores(emptyLowScores()); setDistribution(emptyDistribution());
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -366,15 +362,20 @@ export function QualityMonitor({ workspaceId: _workspaceId, faithfulnessThreshol
   if (loading) return <Skeleton />;
 
   return (
-    <div className="space-y-5" style={{ fontFamily: "'DM Sans', sans-serif" }} aria-label="Quality Monitor">
+    <div className="space-y-6" aria-label="Quality Monitor">
       <div>
-        <h2 className="text-xl font-semibold text-slate-800" style={{ fontFamily: "'Playfair Display', serif" }}>Quality Monitor</h2>
-        <p className="text-sm text-slate-500 mt-0.5">Faithfulness threshold: <span className="font-medium text-slate-700">{faithfulnessThreshold.toFixed(2)}</span></p>
+        <h2 className="text-xl font-semibold text-slate-900">Quality Monitor</h2>
+        <p className="text-sm text-slate-500 mt-1">Faithfulness threshold: <span className="font-medium text-slate-700">{faithfulnessThreshold.toFixed(2)}</span></p>
       </div>
 
       {error && (
-        <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
-          API unavailable — showing sample data. ({error})
+        <div role="status" className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <p>No evaluation data available yet. Quality metrics will appear here once you start using the chat feature.</p>
+          {!hasRealData && (
+            <p className="text-sm text-slate-500 mt-2">
+              No evaluation data available yet. Quality metrics will appear here once you start using the chat feature.
+            </p>
+          )}
         </div>
       )}
 

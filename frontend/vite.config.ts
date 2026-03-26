@@ -13,19 +13,20 @@ export default defineConfig({
     port: 5180,
     proxy: {
       '/api': {
-        target: 'http://localhost:8010',
+        target: 'http://backend:8010',
         changeOrigin: true,
       },
       '/auth': {
-        target: 'http://localhost:8010',
+        target: 'http://backend:8010',
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/auth/, '/api/v1/auth'),
       },
       '/health': {
-        target: 'http://localhost:8010',
+        target: 'http://backend:8010',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8010',
+        target: 'ws://backend:8010',
         ws: true,
       },
     },

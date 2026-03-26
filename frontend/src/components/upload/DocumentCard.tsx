@@ -27,10 +27,10 @@ function useElapsedTime(active: boolean) {
 }
 
 const statusConfig: Record<DocumentStatus, { label: string; className: string }> = {
-  uploading: { label: 'Uploading', className: 'bg-blue-100 text-blue-700' },
-  processing: { label: 'Processing', className: 'bg-amber-100 text-amber-700' },
-  ready: { label: 'Ready', className: 'bg-green-100 text-green-700' },
-  failed: { label: 'Failed', className: 'bg-red-100 text-red-700' },
+  uploading: { label: 'Uploading', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  processing: { label: 'Processing', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  ready: { label: 'Ready', className: 'bg-green-50 text-green-700 border border-green-200' },
+  failed: { label: 'Failed', className: 'bg-red-50 text-red-700 border border-red-200' },
 };
 
 export function DocumentCard({ document, queuePosition }: DocumentCardProps) {
@@ -45,18 +45,20 @@ export function DocumentCard({ document, queuePosition }: DocumentCardProps) {
   const elapsed = useElapsedTime(isActive);
 
   return (
-    <div className="relative flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white p-3 overflow-hidden">
+    <div className="relative flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
       <div className="flex items-center gap-3">
-        <Icon className="h-5 w-5 shrink-0 text-[var(--dm-primary)]" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50">
+          <Icon className="h-5 w-5 text-[var(--dm-primary)]" />
+        </div>
 
         <div className="flex-1 min-w-0">
-          <p className="truncate text-sm font-medium text-slate-800">{document.filename}</p>
-          <p className="text-xs text-slate-400">{formatSize(document.size_bytes)}</p>
+          <p className="truncate text-sm font-medium text-slate-900">{document.filename}</p>
+          <p className="text-xs text-slate-500">{formatSize(document.size_bytes)}</p>
         </div>
 
         {/* Only show status badge for completed/failed documents, not during processing */}
         {!isProcessing && (
-          <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', status.className)}>
+          <span className={cn('shrink-0 rounded-md px-2.5 py-1 text-xs font-medium', status.className)}>
             {status.label}
           </span>
         )}
@@ -65,24 +67,24 @@ export function DocumentCard({ document, queuePosition }: DocumentCardProps) {
       {isProcessing && (
         <>
           {/* Animated progress bar */}
-          <div className="h-1 w-full rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
             {isActive ? (
-              <div className="h-full bg-amber-400 rounded-full animate-[progress_2s_ease-in-out_infinite]"
+              <div className="h-full bg-blue-500 rounded-full animate-[progress_2s_ease-in-out_infinite]"
                 style={{ width: '60%', animation: 'indeterminate 1.5s ease-in-out infinite' }} />
             ) : (
               <div className="h-full w-full bg-slate-200 rounded-full" />
             )}
           </div>
 
-          <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center justify-between text-xs text-slate-500">
             {isActive ? (
-              <span>Processing… {elapsed}</span>
+              <span className="font-medium">Processing… {elapsed}</span>
             ) : (
               <span>
                 Queued{queuePosition !== undefined ? ` · #${queuePosition} in line` : ''}
               </span>
             )}
-            <span className="text-slate-300">~30s avg</span>
+            <span className="text-slate-400">~30s avg</span>
           </div>
         </>
       )}

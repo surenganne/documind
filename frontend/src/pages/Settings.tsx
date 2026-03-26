@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import { getEvalConfig, updateEvalConfig } from '../api/eval';
+import { QualityMonitor } from '../components/insights/QualityMonitor';
 import type { EvalConfig } from '../types';
 
 // In a real app this would come from the auth store
@@ -35,36 +36,13 @@ interface AnalyticsData {
   lowConfidenceQueries: LowConfidenceQuery[];
 }
 
-// ── Mock data fallbacks ────────────────────────────────────────────────────────
+// ── Empty data fallbacks ──────────────────────────────────────────────────────
 
-function mockAnalytics(): AnalyticsData {
+function emptyAnalytics(): AnalyticsData {
   return {
-    topQueries: [
-      { kb_id: 'kb1', kb_name: 'HR Policy', query_text: 'What is the vacation policy?', count: 42 },
-      { kb_id: 'kb1', kb_name: 'HR Policy', query_text: 'How do I request time off?', count: 38 },
-      { kb_id: 'kb2', kb_name: 'Technical Docs', query_text: 'How to set up the dev environment?', count: 31 },
-      { kb_id: 'kb2', kb_name: 'Technical Docs', query_text: 'What are the API rate limits?', count: 27 },
-      { kb_id: 'kb3', kb_name: 'Legal', query_text: 'What are the termination clauses?', count: 24 },
-      { kb_id: 'kb1', kb_name: 'HR Policy', query_text: 'What is the parental leave policy?', count: 19 },
-      { kb_id: 'kb3', kb_name: 'Legal', query_text: 'Summarize the NDA requirements', count: 17 },
-      { kb_id: 'kb2', kb_name: 'Technical Docs', query_text: 'How to deploy to production?', count: 15 },
-      { kb_id: 'kb4', kb_name: 'Finance', query_text: 'What is the expense reimbursement process?', count: 12 },
-      { kb_id: 'kb4', kb_name: 'Finance', query_text: 'How to submit a budget request?', count: 9 },
-    ],
-    confidenceBuckets: [
-      { range: '0.0-0.2', count: 3 },
-      { range: '0.2-0.4', count: 8 },
-      { range: '0.4-0.6', count: 14 },
-      { range: '0.6-0.8', count: 31 },
-      { range: '0.8-1.0', count: 52 },
-    ],
-    lowConfidenceQueries: [
-      { message_id: 'm1', session_id: 's1', query_text: 'What are the termination clauses in section 4b?', confidence_score: 0.18, kb_name: 'Legal', created_at: new Date(Date.now() - 3600000).toISOString() },
-      { message_id: 'm2', session_id: 's2', query_text: 'Explain the indemnification provisions', confidence_score: 0.22, kb_name: 'Legal', created_at: new Date(Date.now() - 7200000).toISOString() },
-      { message_id: 'm3', session_id: 's3', query_text: 'What is the arbitration process?', confidence_score: 0.31, kb_name: 'Legal', created_at: new Date(Date.now() - 10800000).toISOString() },
-      { message_id: 'm4', session_id: 's4', query_text: 'How are bonuses calculated for part-time employees?', confidence_score: 0.35, kb_name: 'HR Policy', created_at: new Date(Date.now() - 14400000).toISOString() },
-      { message_id: 'm5', session_id: 's5', query_text: 'What is the rollover policy for unused PTO?', confidence_score: 0.38, kb_name: 'HR Policy', created_at: new Date(Date.now() - 18000000).toISOString() },
-    ],
+    topQueries: [],
+    confidenceBuckets: [],
+    lowConfidenceQueries: [],
   };
 }
 
@@ -136,7 +114,7 @@ function ConfidenceBarChart({ buckets }: { buckets: ConfidenceBucket[] }) {
 function ChatAnalytics() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [usingMock, setUsingMock] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,22 +128,15 @@ function ChatAnalytics() {
         ]);
         if (cancelled) return;
 
-        const allFailed = [topRes, distRes, lowRes].every((r) => r.status === 'rejected');
-        if (allFailed) {
-          setData(mockAnalytics());
-          setUsingMock(true);
-        } else {
-          const mock = mockAnalytics();
-          setData({
-            topQueries: topRes.status === 'fulfilled' ? topRes.value.data.queries : mock.topQueries,
-            confidenceBuckets: distRes.status === 'fulfilled' ? distRes.value.data.buckets : mock.confidenceBuckets,
-            lowConfidenceQueries: lowRes.status === 'fulfilled' ? lowRes.value.data.queries : mock.lowConfidenceQueries,
-          });
-        }
+        setData({
+          topQueries: topRes.status === 'fulfilled' ? topRes.value.data.queries : [],
+          confidenceBuckets: distRes.status === 'fulfilled' ? distRes.value.data.buckets : [],
+          lowConfidenceQueries: lowRes.status === 'fulfilled' ? lowRes.value.data.queries : [],
+        });
       } catch {
         if (!cancelled) {
-          setData(mockAnalytics());
-          setUsingMock(true);
+          setData(emptyAnalytics());
+          setErrorDetails('Failed to fetch analytics. Check backend connection.');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -193,40 +164,41 @@ function ChatAnalytics() {
   const maxCount = Math.max(...data.topQueries.map((q) => q.count), 1);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 flex flex-col gap-6">
+    <section className="rounded-xl border border-slate-200 bg-white p-6 flex flex-col gap-6 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="font-heading text-lg font-semibold text-slate-700">Chat Analytics</h3>
-        {usingMock && (
-          <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-            Sample data
-          </span>
-        )}
+        <h3 className="text-lg font-semibold text-slate-900">Chat Analytics</h3>
       </div>
+
+      {errorDetails && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p>{errorDetails}</p>
+        </div>
+      )}
 
       {/* Top 10 Queries per KB */}
       <div>
-        <h4 className="text-sm font-semibold text-slate-600 mb-3">Top 10 Queries by Knowledge Base</h4>
-        <div className="overflow-x-auto rounded-lg border border-slate-100">
+        <h4 className="text-sm font-semibold text-slate-700 mb-3">Top 10 Queries by Knowledge Base</h4>
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-sm" aria-label="Top queries per knowledge base">
             <thead>
-              <tr className="bg-[var(--dm-surface)] text-left">
-                <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">#</th>
-                <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Knowledge Base</th>
-                <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Query</th>
-                <th className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">Count</th>
+              <tr className="bg-slate-50 text-left">
+                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide">#</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide">Knowledge Base</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide">Query</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide text-right">Count</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {data.topQueries.map((q, i) => (
                 <tr key={`${q.kb_id}-${i}`} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-2.5 text-slate-400 tabular-nums">{i + 1}</td>
-                  <td className="px-4 py-2.5">
-                    <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: 'var(--dm-primary-light)', color: 'var(--dm-primary-dark)' }}>
+                  <td className="px-4 py-3 text-slate-500 tabular-nums">{i + 1}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-block rounded-md px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
                       {q.kb_name}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-700 max-w-xs truncate" title={q.query_text}>{q.query_text}</td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="px-4 py-3 text-slate-700 max-w-xs truncate" title={q.query_text}>{q.query_text}</td>
+                  <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <div className="h-1.5 rounded-full bg-slate-100 w-16 overflow-hidden">
                         <div
@@ -318,18 +290,11 @@ export function Settings() {
 
   return (
     <div className="p-6 max-w-3xl flex flex-col gap-8">
-      <h2 className="font-heading text-2xl font-semibold text-slate-800">Settings</h2>
-
-      {/* Workspace config placeholder */}
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h3 className="font-heading text-lg font-semibold text-slate-700 mb-4">Workspace</h3>
-        <p className="text-sm text-slate-500">Workspace configuration options will appear here.</p>
-      </section>
-
+      <h2 className="text-2xl font-semibold text-slate-900">Settings</h2>
       {/* Eval thresholds — Admin only */}
       {IS_ADMIN && config && (
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h3 className="font-heading text-lg font-semibold text-slate-700 mb-4">Evaluation Thresholds</h3>
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Evaluation Thresholds</h3>
           <form onSubmit={handleSave} className="flex flex-col gap-4">
             <ThresholdField
               label="Faithfulness threshold"
@@ -372,11 +337,11 @@ export function Settings() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-[var(--dm-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--dm-primary-dark)] disabled:opacity-50 transition-colors"
+                className="rounded-lg bg-[var(--dm-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--dm-primary-dark)] disabled:opacity-50 transition-colors shadow-sm"
               >
                 {saving ? 'Saving…' : 'Save'}
               </button>
-              {saved && <span className="text-sm text-green-600">Saved</span>}
+              {saved && <span className="text-sm text-green-600 font-medium">Saved</span>}
             </div>
           </form>
         </section>
@@ -384,6 +349,9 @@ export function Settings() {
 
       {/* Chat Analytics — Admin only */}
       {IS_ADMIN && <ChatAnalytics />}
+
+      {/* Quality Monitor — Admin only */}
+      {IS_ADMIN && config && <QualityMonitor faithfulnessThreshold={config.faithfulness_threshold} />}
     </div>
   );
 }

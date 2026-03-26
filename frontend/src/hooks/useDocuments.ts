@@ -4,6 +4,7 @@ import {
     getDocument,
     getDocuments,
     getKnowledgeBases,
+    updateKnowledgeBase,
     uploadDocument,
 } from '../api/documents';
 import { useDocumentStore } from '../stores/documentStore';
@@ -25,23 +26,40 @@ export function useDocuments() {
     store.addToUploadQueue({ file, kb_id, progress: 0, status: 'uploading' });
 
     try {
-      await uploadDocument(file, kb_id, (pct) => {
+      const result = await uploadDocument(file, kb_id, (pct) => {
         store.updateUploadProgress(file.name, pct, 'uploading');
       });
       store.updateUploadProgress(file.name, 100, 'done');
-      await loadDocuments(kb_id);
+      
+      // Start polling for this specific document instead of reloading all
+      if (result.document_id) {
+        pollDocumentStatus(result.document_id);
+      }
     } catch {
       store.updateUploadProgress(file.name, 0, 'error');
     }
   };
 
   const deleteKb = async (kb_id: string) => {
-    await deleteKnowledgeBase(kb_id);
-    await loadKnowledgeBases();
+    console.log('deleteKb called with:', kb_id);
+    try {
+      await deleteKnowledgeBase(kb_id);
+      console.log('deleteKnowledgeBase API call succeeded');
+      await loadKnowledgeBases();
+      console.log('Knowledge bases reloaded');
+    } catch (error) {
+      console.error('deleteKb error:', error);
+      throw error;
+    }
   };
 
   const createKb = async (name: string, description?: string) => {
     await createKnowledgeBase(name, description);
+    await loadKnowledgeBases();
+  };
+
+  const updateKb = async (kb_id: string, name?: string, description?: string) => {
+    await updateKnowledgeBase(kb_id, { name, description });
     await loadKnowledgeBases();
   };
 
@@ -57,8 +75,13 @@ export function useDocuments() {
         if (doc.status === 'ready' || doc.status === 'failed') {
           clearInterval(timer);
         }
-      } catch {
-        clearInterval(timer);
+      } catch (error: any) {
+        // Stop polling on auth errors or if document not found
+        if (error?.response?.status === 401 || error?.response?.status === 404) {
+          console.warn(`Stopping poll for document ${doc_id}: ${error?.response?.status}`);
+          clearInterval(timer);
+        }
+        // For other errors, keep polling (might be temporary network issue)
       }
     }, interval);
 
@@ -75,6 +98,7 @@ export function useDocuments() {
     uploadFile,
     deleteKb,
     createKb,
+    updateKb,
     pollDocumentStatus,
   };
 }

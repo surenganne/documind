@@ -27,7 +27,7 @@ def _build_client():
         session_kwargs["profile_name"] = settings.aws_profile
     # Production: no profile → boto3 falls back to EC2 instance role via IMDS
     session = boto3.Session(**session_kwargs)
-    return session.client("bedrock-runtime", region_name=settings.aws_region)
+    return session.client("bedrock-runtime", region_name=settings.aws_bedrock_region)
 
 
 class BedrockProvider:

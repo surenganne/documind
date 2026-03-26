@@ -158,9 +158,9 @@ async def upload_document(
             detail="KnowledgeBase not found in your workspace.",
         )
 
-    # 5. Store file
+    # 5. Store file (async for better performance)
     storage = FileStorageService()
-    file_path = storage.store(file_bytes, file.filename or f"upload.{ext}", str(current_user.workspace_id))
+    file_path = await storage.store_async(file_bytes, file.filename or f"upload.{ext}", str(current_user.workspace_id))
 
     # 6. Create document record
     doc = Document(

@@ -317,9 +317,13 @@ async def get_faithfulness_trend(
 ):
     """Return daily average faithfulness scores for the past N days."""
     since = datetime.utcnow() - timedelta(days=days)
+    
+    # Create the date_trunc expression once to use in both SELECT and GROUP BY
+    day_column = func.date_trunc("day", EvalResult.evaluated_at).label("day")
+    
     result = await db.execute(
         select(
-            func.date_trunc("day", EvalResult.evaluated_at).label("day"),
+            day_column,
             func.avg(EvalResult.faithfulness_score).label("avg_faithfulness"),
         )
         .join(ChatMessage, EvalResult.message_id == ChatMessage.id)
@@ -329,8 +333,8 @@ async def get_faithfulness_trend(
             EvalResult.evaluated_at >= since,
             ChatMessage.role == "assistant",
         )
-        .group_by(func.date_trunc("day", EvalResult.evaluated_at))
-        .order_by(func.date_trunc("day", EvalResult.evaluated_at))
+        .group_by(day_column)
+        .order_by(day_column)
     )
     rows = result.all()
     dates = [row.day.strftime("%Y-%m-%d") for row in rows]
@@ -424,6 +428,7 @@ async def get_low_score_messages(
     cfg = result.scalar_one_or_none()
     threshold = cfg.faithfulness_threshold if cfg else 0.85
 
+    # Use DISTINCT ON to get only one row per message_id (the lowest score)
     rows_result = await db.execute(
         select(
             ChatMessage.id,
@@ -439,7 +444,8 @@ async def get_low_score_messages(
             ChatMessage.role == "assistant",
             EvalResult.faithfulness_score < threshold,
         )
-        .order_by(EvalResult.faithfulness_score)
+        .distinct(ChatMessage.id)
+        .order_by(ChatMessage.id, EvalResult.faithfulness_score)
         .limit(limit)
     )
     rows = rows_result.all()

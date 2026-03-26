@@ -24,7 +24,11 @@ export function DropZone({ kb_id, onUpload }: DropZoneProps) {
   const handleFiles = (files: File[]) => {
     const valid = files.filter((f) => ACCEPTED_MIME.includes(f.type));
     if (valid.length === 0) return;
-    valid.forEach((f) => uploadFile(f, kb_id));
+    // Upload all files in parallel instead of sequentially
+    valid.forEach((f) => {
+      // Don't await - let all uploads start immediately
+      uploadFile(f, kb_id);
+    });
     onUpload?.(valid);
   };
 
@@ -55,23 +59,24 @@ export function DropZone({ kb_id, onUpload }: DropZoneProps) {
       animate={
         isDragging
           ? { boxShadow: '0 0 0 2px var(--dm-primary), 0 0 16px 4px var(--dm-primary-light)' }
-          : { boxShadow: '0 0 0 1px #e2e8f0' }
+          : { boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)' }
       }
       transition={{ duration: 0.2 }}
-      className="relative flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-[var(--dm-surface)] p-10 cursor-pointer hover:bg-[var(--dm-primary-light)] transition-colors"
+      className="relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-12 cursor-pointer hover:border-[var(--dm-primary)] hover:bg-blue-50 transition-all"
     >
       <motion.div
         animate={isDragging ? { scale: 1.15 } : { scale: 1 }}
         transition={{ duration: 0.2 }}
+        className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100"
       >
-        <Upload className="h-8 w-8 text-[var(--dm-primary)]" />
+        <Upload className="h-6 w-6 text-[var(--dm-primary)]" />
       </motion.div>
 
-      <p className="text-sm text-slate-600">
+      <p className="text-sm font-medium text-slate-700">
         Drag &amp; drop files here, or{' '}
         <span className="text-[var(--dm-primary)] underline">browse</span>
       </p>
-      <p className="text-xs text-slate-400">Accepted: {ACCEPTED_TYPES.join(', ')}</p>
+      <p className="text-xs text-slate-500">Accepted: {ACCEPTED_TYPES.join(', ')}</p>
 
       <input
         ref={inputRef}

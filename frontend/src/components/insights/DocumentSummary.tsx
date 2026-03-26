@@ -21,8 +21,7 @@ function parseBullets(summary: string): string[] {
 function Skeleton() {
   return (
     <div
-      className="rounded-xl border border-slate-200 bg-white p-6 space-y-6 animate-pulse"
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
+      className="rounded-xl border border-slate-200 bg-white p-6 space-y-6 animate-pulse shadow-sm"
       aria-busy="true"
       aria-label="Loading document insights"
     >
@@ -66,14 +65,13 @@ interface EntityChipGroupProps {
 function EntityChipGroup({ label, items }: EntityChipGroupProps) {
   if (!items.length) return null;
   return (
-    <div className="space-y-1">
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span>
-      <div className="flex flex-wrap gap-1.5">
+    <div className="space-y-1.5">
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</span>
+      <div className="flex flex-wrap gap-2">
         {items.map((item) => (
           <span
             key={item}
-            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-            style={{ background: 'var(--dm-primary-light)', color: 'var(--dm-primary-dark)' }}
+            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200"
           >
             {item}
           </span>
@@ -88,13 +86,13 @@ function EntityChipGroup({ label, items }: EntityChipGroupProps) {
 function ComplexityBar({ score }: { score: number }) {
   const pct = Math.round(Math.min(Math.max(score, 0), 1) * 100);
   const label = pct < 34 ? 'Low' : pct < 67 ? 'Medium' : 'High';
-  const barColor = pct < 34 ? '#22c55e' : pct < 67 ? 'var(--dm-accent)' : '#ef4444';
+  const barColor = pct < 34 ? '#22c55e' : pct < 67 ? '#f59e0b' : '#ef4444';
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-xs text-slate-500">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs text-slate-600">
         <span className="font-semibold uppercase tracking-wide">Complexity</span>
-        <span className="font-medium" style={{ color: barColor }}>
+        <span className="font-semibold" style={{ color: barColor }}>
           {label} ({pct}%)
         </span>
       </div>
@@ -149,9 +147,8 @@ export function DocumentSummary({ docId }: DocumentSummaryProps) {
   if (error) {
     return (
       <div
-        className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700"
+        className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 shadow-sm"
         role="alert"
-        style={{ fontFamily: "'DM Sans', sans-serif" }}
       >
         <p className="font-semibold mb-1">Could not load insights</p>
         <p className="text-red-600">{error}</p>
@@ -165,19 +162,10 @@ export function DocumentSummary({ docId }: DocumentSummaryProps) {
   const entities: KeyEntities = data.key_entities ?? {};
 
   return (
-    <div
-      className="rounded-xl border border-slate-200 bg-white overflow-hidden"
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
-    >
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
       {/* Header */}
-      <div
-        className="px-6 py-4 border-b border-slate-100"
-        style={{ background: 'var(--dm-surface)' }}
-      >
-        <h2
-          className="text-lg font-semibold text-slate-800"
-          style={{ fontFamily: "'Playfair Display', serif" }}
-        >
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <h2 className="text-lg font-semibold text-slate-900">
           Document Insights
         </h2>
       </div>
@@ -188,16 +176,15 @@ export function DocumentSummary({ docId }: DocumentSummaryProps) {
           <section aria-labelledby="exec-summary-heading">
             <h3
               id="exec-summary-heading"
-              className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3"
+              className="text-sm font-semibold uppercase tracking-wide text-slate-600 mb-3"
             >
               Executive Summary
             </h3>
-            <ul className="space-y-2">
+            <ul className="space-y-2.5">
               {bullets.map((bullet, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
+                <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700 leading-relaxed">
                   <span
-                    className="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full"
-                    style={{ background: 'var(--dm-primary)' }}
+                    className="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-[var(--dm-primary)]"
                     aria-hidden="true"
                   />
                   {bullet}
@@ -212,7 +199,7 @@ export function DocumentSummary({ docId }: DocumentSummaryProps) {
           <section aria-labelledby="entities-heading">
             <h3
               id="entities-heading"
-              className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3"
+              className="text-sm font-semibold uppercase tracking-wide text-slate-600 mb-3"
             >
               Key Entities
             </h3>
@@ -230,7 +217,7 @@ export function DocumentSummary({ docId }: DocumentSummaryProps) {
           <section aria-labelledby="tags-heading">
             <h3
               id="tags-heading"
-              className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3"
+              className="text-sm font-semibold uppercase tracking-wide text-slate-600 mb-3"
             >
               Tags
             </h3>
@@ -238,8 +225,7 @@ export function DocumentSummary({ docId }: DocumentSummaryProps) {
               {data.document_tags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium"
-                  style={{ background: 'var(--dm-accent)', color: '#fff' }}
+                  className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200"
                 >
                   {tag}
                 </span>
