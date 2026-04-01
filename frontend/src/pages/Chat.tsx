@@ -35,6 +35,11 @@ export function Chat() {
     : [];
 
   const handleNewSession = async (kb_id: string) => {
+    // If there's already an active session for this KB with no messages, reuse it
+    const existing = sessions.find((s) => s.kb_id === kb_id);
+    if (existing && messages.length === 0 && activeSessionId === existing.id) {
+      return; // already on an empty session for this KB
+    }
     await createSession(kb_id);
     loadDocuments(kb_id);
   };
@@ -44,6 +49,8 @@ export function Chat() {
     if (!text || isStreaming || !activeSessionId) return;
     setInput('');
     await sendMessage(text);
+    // Refresh sessions so the auto-generated title appears
+    loadSessions();
   };
 
   const handleCitationClick = (docId: string, page: number, excerpt?: string) => {
