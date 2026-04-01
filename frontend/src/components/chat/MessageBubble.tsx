@@ -2,6 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
 import type { ChatMessage } from '../../types';
+import { CitationBadge } from './CitationBadge';
 import { ReasoningTrace } from './ReasoningTrace';
 
 interface MessageBubbleProps {
