@@ -54,13 +54,13 @@ export function MessageBubble({ message, isAdmin, onCitationClick, showDisclaime
       )}
 
       {!isUser && message.citations && message.citations.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 max-w-[80%]">
+        <div className="flex flex-wrap gap-1.5 max-w-[80%] overflow-visible">
           {message.citations.map((citation, i) => (
             <CitationBadge
               key={i}
               citation={citation}
               index={i}
-              onClick={() => onCitationClick?.(citation.document_id, citation.page_number, citation.excerpt)}
+              onOpen={() => onCitationClick?.(citation.document_id, citation.page_number, citation.excerpt)}
             />
           ))}
         </div>
