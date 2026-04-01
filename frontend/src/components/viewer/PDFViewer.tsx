@@ -1,45 +1,46 @@
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// Use CDN worker to avoid bundling issues
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 const ZOOM_STEP = 0.25;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3.0;
 const ZOOM_DEFAULT = 1.0;
-// Base page width at 100% zoom
 const BASE_WIDTH = 750;
 
 interface PDFViewerProps {
   url: string | null;
   currentPage?: number;
-  highlight?: string; // text excerpt to highlight
+  highlight?: string;
   onPageChange?: (page: number) => void;
 }
 
-/** Normalize text for fuzzy matching — collapse whitespace, lowercase */
 function normalize(s: string) {
   return s.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-/** Find and highlight spans in the text layer that match the excerpt */
-function highlightExcerpt(container: HTMLElement, excerpt: string) {
+/** Try to highlight text spans. Returns true if any match found. */
+function highlightTextLayer(container: HTMLElement, excerpt: string): boolean {
+  // Clear previous highlights
   container.querySelectorAll('.pdf-highlight').forEach((el) => {
     const span = el as HTMLElement;
     span.style.background = '';
-    span.style.borderRadius = '';
     span.classList.remove('pdf-highlight');
   });
 
-  if (!excerpt) return;
+  if (!excerpt) return false;
 
   const target = normalize(excerpt).slice(0, 120);
-  const spans = Array.from(container.querySelectorAll('span')) as HTMLElement[];
+  const firstWords = target.split(' ').slice(0, 5).join(' ');
+  const spans = Array.from(container.querySelectorAll('.react-pdf__Page__textContent span')) as HTMLElement[];
 
+  if (spans.length === 0) return false; // image PDF — no text layer
+
+  // Try to find matching spans by accumulating text
   let accumulated = '';
   const matchSpans: HTMLElement[] = [];
   let matched = false;
@@ -50,35 +51,67 @@ function highlightExcerpt(container: HTMLElement, excerpt: string) {
     accumulated += ' ' + text;
     accumulated = accumulated.trim();
 
-    if (!matched && accumulated.includes(target.slice(0, 40))) {
+    if (!matched && (accumulated.includes(firstWords) || matchSpans.length > 0)) {
       matchSpans.push(span);
-      if (accumulated.includes(target)) {
+      if (accumulated.includes(target.slice(0, 60))) {
         matched = true;
         break;
       }
-    } else if (matchSpans.length > 0 && !matched) {
-      matchSpans.push(span);
-      if (accumulated.includes(target)) {
-        matched = true;
-        break;
-      }
+      // Bail if we've accumulated too much without a match
+      if (matchSpans.length > 20) matchSpans.shift();
     }
   }
 
-  const firstWords = target.split(' ').slice(0, 6).join(' ');
   const toHighlight = matched && matchSpans.length > 0
     ? matchSpans
-    : spans.filter((s) => normalize(s.textContent ?? '').includes(firstWords));
+    : spans.filter((s) => normalize(s.textContent ?? '').includes(firstWords)).slice(0, 5);
+
+  if (toHighlight.length === 0) return false;
 
   toHighlight.forEach((span) => {
-    span.style.background = 'rgba(251, 191, 36, 0.5)';
+    span.style.background = 'rgba(251, 191, 36, 0.55)';
     span.style.borderRadius = '2px';
     span.classList.add('pdf-highlight');
   });
 
-  if (toHighlight[0]) {
-    toHighlight[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
+  toHighlight[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return true;
+}
+
+/** For image PDFs: show a banner at the top of the page indicating the excerpt */
+function showImagePdfBanner(container: HTMLElement, excerpt: string) {
+  container.querySelectorAll('.pdf-image-banner').forEach((el) => el.remove());
+  if (!excerpt) return;
+
+  const pageEl = container.querySelector('.react-pdf__Page') as HTMLElement | null;
+  if (!pageEl) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'pdf-image-banner';
+  banner.style.cssText = `
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(251, 191, 36, 0.95);
+    color: #78350f;
+    font-size: 11px;
+    font-style: italic;
+    padding: 6px 12px;
+    border-radius: 6px;
+    max-width: 90%;
+    text-align: center;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    pointer-events: none;
+    line-height: 1.4;
+  `;
+  const short = excerpt.length > 120 ? excerpt.slice(0, 120) + '…' : excerpt;
+  banner.textContent = `📌 "${short}"`;
+
+  // Page canvas wrapper is position:relative — append banner inside it
+  pageEl.style.position = 'relative';
+  pageEl.appendChild(banner);
 }
 
 export function PDFViewer({ url, currentPage = 1, highlight, onPageChange }: PDFViewerProps) {
@@ -86,11 +119,13 @@ export function PDFViewer({ url, currentPage = 1, highlight, onPageChange }: PDF
   const [page, setPage] = useState(currentPage);
   const [zoom, setZoom] = useState(ZOOM_DEFAULT);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch PDF as blob with Authorization header to avoid 401
+  // Fetch PDF as blob with auth header
   useEffect(() => {
     if (!url) { setBlobUrl(null); return; }
+    setIsLoading(true);
     let objectUrl: string | null = null;
     const token = localStorage.getItem('access_token') ?? '';
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
@@ -102,7 +137,8 @@ export function PDFViewer({ url, currentPage = 1, highlight, onPageChange }: PDF
         objectUrl = URL.createObjectURL(blob);
         setBlobUrl(objectUrl);
       })
-      .catch(() => setBlobUrl(null));
+      .catch(() => setBlobUrl(null))
+      .finally(() => setIsLoading(false));
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
@@ -122,13 +158,30 @@ export function PDFViewer({ url, currentPage = 1, highlight, onPageChange }: PDF
   const zoomOut = () => setZoom((z) => Math.max(+(z - ZOOM_STEP).toFixed(2), ZOOM_MIN));
   const resetZoom = () => setZoom(ZOOM_DEFAULT);
 
-  const handleTextLayerRendered = () => {
-    if (highlight && containerRef.current) {
-      setTimeout(() => {
-        if (containerRef.current) highlightExcerpt(containerRef.current, highlight);
-      }, 100);
-    }
-  };
+  const handleTextLayerRendered = useCallback(() => {
+    if (!highlight || !containerRef.current) return;
+    // Small delay to ensure DOM is fully painted
+    setTimeout(() => {
+      if (!containerRef.current) return;
+      const found = highlightTextLayer(containerRef.current, highlight);
+      if (!found) {
+        // Image-based PDF — show banner fallback
+        showImagePdfBanner(containerRef.current, highlight);
+      }
+    }, 150);
+  }, [highlight, page]);
+
+  // For image PDFs the text layer never fires — trigger banner on page render
+  const handlePageRenderSuccess = useCallback(() => {
+    if (!highlight || !containerRef.current) return;
+    setTimeout(() => {
+      if (!containerRef.current) return;
+      const spans = containerRef.current.querySelectorAll('.react-pdf__Page__textContent span');
+      if (spans.length === 0) {
+        showImagePdfBanner(containerRef.current, highlight);
+      }
+    }, 300);
+  }, [highlight, page]);
 
   if (!url) {
     return (
@@ -138,7 +191,7 @@ export function PDFViewer({ url, currentPage = 1, highlight, onPageChange }: PDF
     );
   }
 
-  if (!blobUrl) {
+  if (isLoading || !blobUrl) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-slate-400">
         <div className="animate-pulse">Loading document…</div>
@@ -150,7 +203,6 @@ export function PDFViewer({ url, currentPage = 1, highlight, onPageChange }: PDF
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-xs text-slate-600 gap-2 shrink-0">
-        {/* Page navigation */}
         <div className="flex items-center gap-1">
           <button
             onClick={() => goTo(page - 1)}
@@ -173,30 +225,14 @@ export function PDFViewer({ url, currentPage = 1, highlight, onPageChange }: PDF
           </button>
         </div>
 
-        {/* Zoom controls */}
         <div className="flex items-center gap-1">
-          <button
-            onClick={zoomOut}
-            disabled={zoom <= ZOOM_MIN}
-            className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 transition-colors"
-            aria-label="Zoom out"
-          >
+          <button onClick={zoomOut} disabled={zoom <= ZOOM_MIN} className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 transition-colors" aria-label="Zoom out">
             <ZoomOut className="h-4 w-4" />
           </button>
-          <button
-            onClick={resetZoom}
-            className="rounded px-2 py-0.5 text-xs font-mono hover:bg-slate-100 transition-colors min-w-[48px] text-center"
-            aria-label="Reset zoom"
-            title="Click to reset zoom"
-          >
+          <button onClick={resetZoom} className="rounded px-2 py-0.5 text-xs font-mono hover:bg-slate-100 transition-colors min-w-[48px] text-center" title="Reset zoom">
             {Math.round(zoom * 100)}%
           </button>
-          <button
-            onClick={zoomIn}
-            disabled={zoom >= ZOOM_MAX}
-            className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 transition-colors"
-            aria-label="Zoom in"
-          >
+          <button onClick={zoomIn} disabled={zoom >= ZOOM_MAX} className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 transition-colors" aria-label="Zoom in">
             <ZoomIn className="h-4 w-4" />
           </button>
         </div>
@@ -207,14 +243,22 @@ export function PDFViewer({ url, currentPage = 1, highlight, onPageChange }: PDF
         <Document
           file={blobUrl}
           onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-          loading={<div className="animate-pulse rounded bg-slate-200 h-64 w-full" />}
+          loading={<div className="animate-pulse rounded bg-slate-200 h-64 w-96" />}
+          error={<div className="text-sm text-red-500 p-4">Failed to load PDF.</div>}
         >
           <Page
             pageNumber={page}
             width={Math.round(BASE_WIDTH * zoom)}
-            renderTextLayer
-            renderAnnotationLayer
+            renderTextLayer={true}
+            renderAnnotationLayer={true}
+            onRenderSuccess={handlePageRenderSuccess}
             onRenderTextLayerSuccess={handleTextLayerRendered}
+            // Suppress AbortException from cancelled text layer renders
+            onRenderTextLayerError={(err) => {
+              if (!String(err).includes('AbortException') && !String(err).includes('cancelled')) {
+                console.warn('Text layer error:', err);
+              }
+            }}
           />
         </Document>
       </div>

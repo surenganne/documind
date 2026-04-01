@@ -122,15 +122,31 @@ async def create_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new chat session linked to a KnowledgeBase."""
+    """Create a new chat session linked to a KnowledgeBase.
+    Auto-deletes any existing empty sessions for this user first.
+    """
     await _get_kb_or_403(body.kb_id, current_user.workspace_id, db)
 
-    title = body.title or f"Session {uuid.uuid4().hex[:8]}"
+    # Delete any empty sessions for this user (no messages) before creating a new one
+    empty_sessions_result = await db.execute(
+        select(ChatSession).where(
+            ChatSession.workspace_id == current_user.workspace_id,
+            ChatSession.user_id == current_user.id,
+        )
+    )
+    for s in empty_sessions_result.scalars().all():
+        msg_count_result = await db.execute(
+            select(ChatMessage).where(ChatMessage.session_id == s.id).limit(1)
+        )
+        if msg_count_result.scalar_one_or_none() is None:
+            await db.delete(s)
+    await db.flush()
+
     session = ChatSession(
         workspace_id=current_user.workspace_id,
         kb_id=body.kb_id,
         user_id=current_user.id,
-        title=title,
+        title="New conversation",
     )
     db.add(session)
     await db.commit()
@@ -147,7 +163,7 @@ async def list_sessions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all chat sessions for the current user."""
+    """List chat sessions that have at least one message, newest first."""
     result = await db.execute(
         select(ChatSession)
         .where(
@@ -156,7 +172,17 @@ async def list_sessions(
         )
         .order_by(ChatSession.created_at.desc())
     )
-    return result.scalars().all()
+    sessions = result.scalars().all()
+
+    # Filter to only sessions with messages
+    sessions_with_messages = []
+    for s in sessions:
+        msg_result = await db.execute(
+            select(ChatMessage).where(ChatMessage.session_id == s.id).limit(1)
+        )
+        if msg_result.scalar_one_or_none() is not None:
+            sessions_with_messages.append(s)
+    return sessions_with_messages
 
 
 # ── POST /chat/sessions/{id}/messages ─────────────────────────────────────────
@@ -183,6 +209,14 @@ async def send_message(
         content=body.content,
     )
     db.add(user_msg)
+    await db.flush()
+
+    # Auto-title the session from the first user message (truncated to 60 chars)
+    if session.title == "New conversation":
+        title = body.content.strip().replace('\n', ' ')
+        session.title = title[:60] + ('…' if len(title) > 60 else '')
+        db.add(session)
+
     await db.commit()
     await db.refresh(user_msg)
 
