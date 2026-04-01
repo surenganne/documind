@@ -2,7 +2,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
 import type { ChatMessage } from '../../types';
-import { CitationCard } from './CitationCard';
 import { ReasoningTrace } from './ReasoningTrace';
 
 interface MessageBubbleProps {
@@ -54,11 +53,12 @@ export function MessageBubble({ message, isAdmin, onCitationClick, showDisclaime
       )}
 
       {!isUser && message.citations && message.citations.length > 0 && (
-        <div className="flex flex-col gap-1.5 max-w-[80%]">
+        <div className="flex flex-wrap gap-1.5 max-w-[80%]">
           {message.citations.map((citation, i) => (
-            <CitationCard
+            <CitationBadge
               key={i}
               citation={citation}
+              index={i}
               onClick={() => onCitationClick?.(citation.document_id, citation.page_number, citation.excerpt)}
             />
           ))}
