@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 
 class KnowledgeBaseCreate(BaseModel):
@@ -26,10 +26,17 @@ class KnowledgeBaseOut(BaseModel):
     created_by: uuid.UUID
     created_at: datetime
     document_count: int = 0
+    settings: Optional[dict[str, Any]] = None
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def rag_mode(self) -> str:
+        if self.settings:
+            return self.settings.get("rag_mode", "pageindex")
+        return "pageindex"
 
     model_config = {"from_attributes": True}
 
 
 class KnowledgeBaseDetail(KnowledgeBaseOut):
-    settings: dict[str, Any]
     documents: list[dict[str, Any]] = []

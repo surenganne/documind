@@ -53,8 +53,8 @@ export function useDocuments() {
     }
   };
 
-  const createKb = async (name: string, description?: string) => {
-    await createKnowledgeBase(name, description);
+  const createKb = async (name: string, description?: string, settings?: import('../types').KBSettings) => {
+    await createKnowledgeBase(name, description, settings);
     await loadKnowledgeBases();
   };
 

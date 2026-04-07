@@ -1,4 +1,4 @@
-import type { Document, KnowledgeBase } from '../types';
+import type { Document, KBSettings, KnowledgeBase } from '../types';
 import { apiClient } from './client';
 
 export async function uploadDocument(
@@ -33,8 +33,8 @@ export async function getDocument(doc_id: string): Promise<Document> {
   return data;
 }
 
-export async function createKnowledgeBase(name: string, description?: string): Promise<KnowledgeBase> {
-  const { data } = await apiClient.post<KnowledgeBase>('/knowledge-bases', { name, description });
+export async function createKnowledgeBase(name: string, description?: string, settings?: KBSettings): Promise<KnowledgeBase> {
+  const { data } = await apiClient.post<KnowledgeBase>('/knowledge-bases', { name, description, settings });
   return data;
 }
 

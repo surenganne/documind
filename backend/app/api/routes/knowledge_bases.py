@@ -61,6 +61,7 @@ async def create_knowledge_base(
         created_by=kb.created_by,
         created_at=kb.created_at,
         document_count=doc_count,
+        settings=kb.settings or {},
     )
 
 
@@ -89,6 +90,7 @@ async def list_knowledge_bases(
                 created_by=kb.created_by,
                 created_at=kb.created_at,
                 document_count=doc_count,
+                settings=kb.settings or {},
             )
         )
     return out
@@ -167,6 +169,7 @@ async def update_knowledge_base(
         created_by=kb.created_by,
         created_at=kb.created_at,
         document_count=doc_count,
+        settings=kb.settings or {},
     )
 
 

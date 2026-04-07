@@ -236,41 +236,80 @@ async def send_message(
         if m.id != user_msg.id
     ]
 
-    # Load document trees for the KB
-    trees = await _load_kb_trees(session.kb_id, db)
+    # Load KB to check rag_mode
+    kb_result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == session.kb_id))
+    kb = kb_result.scalar_one()
+    rag_mode = (kb.settings or {}).get("rag_mode", "pageindex")
 
-    # Run tree navigation
     llm = BedrockProvider()
-    nav_trees = [(doc_id, tree) for doc_id, _, tree in trees]
-    nav_result = await navigate(body.content, nav_trees, llm)
 
-    # Build trace
-    trace = build_trace(
-        query=body.content,
-        selected_node_ids=nav_result.selected_node_ids,
-        rationale=nav_result.rationale,
-        confidence=nav_result.confidence,
-        trees=nav_trees,
-    )
+    if rag_mode == "vector":
+        # Vector RAG path
+        from app.services.embedding.factory import EmbeddingFactory
+        from app.services.retrieval.factory import RetrieverFactory
+        from app.services.pageindex.chunk_answer_generator import generate_answer_from_chunks
 
-    # Generate answer
-    answer = await generate_answer(
-        query=body.content,
-        node_ids=nav_result.selected_node_ids,
-        trees=trees,
-        history=history,
-        llm=llm,
-    )
+        kb_settings = kb.settings or {}
+        emb = EmbeddingFactory.create(
+            kb_settings.get("embedding_provider", "bedrock"),
+            kb_settings.get("embedding_model", "amazon.titan-embed-text-v2:0"),
+        )
+        retriever = RetrieverFactory.create(kb_settings, emb)
+        chunks = await retriever.retrieve(body.content, session.kb_id, current_user.workspace_id, db)
+        answer = await generate_answer_from_chunks(body.content, chunks, history, llm)
 
-    # Store assistant message
-    assistant_msg = ChatMessage(
-        session_id=session_id,
-        role="assistant",
-        content=answer.content,
-        citations=[c.to_dict() for c in answer.citations],
-        reasoning_trace=trace.to_dict(),
-        node_ids_visited=trace.node_ids,
-    )
+        reasoning_trace_data = {
+            "mode": "vector",
+            "chunks_retrieved": len(chunks),
+            "retrieval_mode": kb_settings.get("retrieval_mode", "vector"),
+        }
+        node_ids_visited = [c.node_id for c in answer.citations]
+
+        # Store assistant message
+        assistant_msg = ChatMessage(
+            session_id=session_id,
+            role="assistant",
+            content=answer.content,
+            citations=[c.to_dict() for c in answer.citations],
+            reasoning_trace=reasoning_trace_data,
+            node_ids_visited=node_ids_visited,
+        )
+    else:
+        # Existing PageIndex path
+        # Load document trees for the KB
+        trees = await _load_kb_trees(session.kb_id, db)
+
+        # Run tree navigation
+        nav_trees = [(doc_id, tree) for doc_id, _, tree in trees]
+        nav_result = await navigate(body.content, nav_trees, llm)
+
+        # Build trace
+        trace = build_trace(
+            query=body.content,
+            selected_node_ids=nav_result.selected_node_ids,
+            rationale=nav_result.rationale,
+            confidence=nav_result.confidence,
+            trees=nav_trees,
+        )
+
+        # Generate answer
+        answer = await generate_answer(
+            query=body.content,
+            node_ids=nav_result.selected_node_ids,
+            trees=trees,
+            history=history,
+            llm=llm,
+        )
+
+        # Store assistant message
+        assistant_msg = ChatMessage(
+            session_id=session_id,
+            role="assistant",
+            content=answer.content,
+            citations=[c.to_dict() for c in answer.citations],
+            reasoning_trace=trace.to_dict(),
+            node_ids_visited=trace.node_ids,
+        )
     db.add(assistant_msg)
     await db.flush()  # get assistant_msg.id before audit log
 
@@ -356,45 +395,88 @@ async def _ws_stream_answer(
     trees: list[tuple[str, str, dict]],
     db: AsyncSession,
     user: User,
+    kb: KnowledgeBase | None = None,
 ) -> tuple[str, list, dict, list[str]]:
-    """Run PageIndex pipeline and stream tokens over WebSocket. Returns (content, citations, trace_dict, node_ids)."""
+    """Run RAG pipeline and stream tokens over WebSocket. Returns (content, citations, trace_dict, node_ids)."""
     llm = BedrockProvider()
-    nav_trees = [(doc_id, tree) for doc_id, _, tree in trees]
-    nav_result = await navigate(query, nav_trees, llm)
 
-    trace = build_trace(
-        query=query,
-        selected_node_ids=nav_result.selected_node_ids,
-        rationale=nav_result.rationale,
-        confidence=nav_result.confidence,
-        trees=nav_trees,
-    )
+    # Check rag_mode
+    rag_mode = (kb.settings or {}).get("rag_mode", "pageindex") if kb else "pageindex"
 
-    # Send trace event first
-    await websocket.send_json({"type": "trace", "data": trace.to_dict()})
+    if rag_mode == "vector":
+        from app.services.embedding.factory import EmbeddingFactory
+        from app.services.retrieval.factory import RetrieverFactory
+        from app.services.pageindex.chunk_answer_generator import generate_answer_from_chunks
 
-    # Collect full response first, then parse and stream clean tokens
-    full_content = ""
-    async for chunk in stream_answer(query, nav_result.selected_node_ids, trees, history, llm):
-        full_content += chunk
+        kb_settings = (kb.settings or {}) if kb else {}
+        emb = EmbeddingFactory.create(
+            kb_settings.get("embedding_provider", "bedrock"),
+            kb_settings.get("embedding_model", "amazon.titan-embed-text-v2:0"),
+        )
+        retriever = RetrieverFactory.create(kb_settings, emb)
+        chunks = await retriever.retrieve(query, session.kb_id, user.workspace_id, db)
+        answer = await generate_answer_from_chunks(query, chunks, history, llm)
 
-    # Parse to extract clean answer and citations
-    from app.services.pageindex.answer_generator import _parse_answer_and_citations
-    answer_text, citations = _parse_answer_and_citations(full_content)
+        trace_dict = {
+            "mode": "vector",
+            "chunks_retrieved": len(chunks),
+            "retrieval_mode": kb_settings.get("retrieval_mode", "vector"),
+        }
+        node_ids = [c.node_id for c in answer.citations]
 
-    # Stream the cleaned answer text in small chunks for better UX
-    chunk_size = 5  # characters per chunk
-    for i in range(0, len(answer_text), chunk_size):
-        chunk = answer_text[i:i + chunk_size]
-        await websocket.send_json({"type": "token", "data": chunk})
+        await websocket.send_json({"type": "trace", "data": trace_dict})
 
-    # Send done event with citations
-    await websocket.send_json({
-        "type": "done",
-        "citations": [c.to_dict() for c in citations],
-    })
+        # Stream answer text in chunks
+        chunk_size = 5
+        for i in range(0, len(answer.content), chunk_size):
+            tok = answer.content[i:i + chunk_size]
+            await websocket.send_json({"type": "token", "data": tok})
 
-    return answer_text, citations, trace.to_dict(), trace.node_ids
+        await websocket.send_json({
+            "type": "done",
+            "citations": [c.to_dict() for c in answer.citations],
+        })
+
+        return answer.content, answer.citations, trace_dict, node_ids
+
+    else:
+        # Existing PageIndex path
+        nav_trees = [(doc_id, tree) for doc_id, _, tree in trees]
+        nav_result = await navigate(query, nav_trees, llm)
+
+        trace = build_trace(
+            query=query,
+            selected_node_ids=nav_result.selected_node_ids,
+            rationale=nav_result.rationale,
+            confidence=nav_result.confidence,
+            trees=nav_trees,
+        )
+
+        # Send trace event first
+        await websocket.send_json({"type": "trace", "data": trace.to_dict()})
+
+        # Collect full response first, then parse and stream clean tokens
+        full_content = ""
+        async for chunk in stream_answer(query, nav_result.selected_node_ids, trees, history, llm):
+            full_content += chunk
+
+        # Parse to extract clean answer and citations
+        from app.services.pageindex.answer_generator import _parse_answer_and_citations
+        answer_text, citations = _parse_answer_and_citations(full_content)
+
+        # Stream the cleaned answer text in small chunks for better UX
+        chunk_size = 5  # characters per chunk
+        for i in range(0, len(answer_text), chunk_size):
+            chunk = answer_text[i:i + chunk_size]
+            await websocket.send_json({"type": "token", "data": chunk})
+
+        # Send done event with citations
+        await websocket.send_json({
+            "type": "done",
+            "citations": [c.to_dict() for c in citations],
+        })
+
+        return answer_text, citations, trace.to_dict(), trace.node_ids
 
 
 # WebSocket router is registered on the app directly (not under /api/v1 prefix)
@@ -454,8 +536,12 @@ async def websocket_chat(
             ]
             trees = await _load_kb_trees(session.kb_id, db)
 
+            # Load KB for rag_mode check
+            kb_res = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == session.kb_id))
+            ws_kb = kb_res.scalar_one_or_none()
+
             answer_text, citations, trace_dict, node_ids = await _ws_stream_answer(
-                websocket, session, query, history, trees, db, user
+                websocket, session, query, history, trees, db, user, kb=ws_kb
             )
 
             # Store assistant message

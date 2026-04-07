@@ -45,11 +45,41 @@ export interface Document {
   created_at: string;
 }
 
+export interface KBSettings {
+  rag_mode: 'pageindex' | 'vector';
+  index_method?: 'high_quality' | 'economical' | 'hybrid';
+  chunk_strategy?: 'recursive' | 'parent_child';
+  chunk_size?: number;
+  chunk_overlap?: number;
+  retrieval_mode?: 'vector' | 'fulltext' | 'hybrid';
+  top_k?: number;
+  score_threshold?: number | null;
+  rerank_enabled?: boolean;
+  hybrid_semantic_weight?: number;
+  embedding_provider?: string;
+  embedding_model?: string;
+}
+
 export interface KnowledgeBase {
   id: string;
+  workspace_id: string;
   name: string;
   description?: string;
   document_count: number;
+  created_at: string;
+  settings?: KBSettings;
+  rag_mode?: 'pageindex' | 'vector'; // derived from settings by backend
+}
+
+export interface ModelProviderConfig {
+  id: string;
+  workspace_id: string;
+  provider_type: 'llm' | 'embedding' | 'rerank';
+  provider_name: string;
+  model_id: string;
+  region?: string;
+  extra_config: Record<string, unknown>;
+  is_default: boolean;
   created_at: string;
 }
 

@@ -193,12 +193,17 @@ async def upload_document(
     await db.commit()
     await db.refresh(doc)
 
-    # 8. Enqueue Celery task (import here to avoid circular imports)
+    # 8. Enqueue Celery task based on KB rag_mode (import here to avoid circular imports)
     try:
-        from app.workers.tree_tasks import build_document_tree
-        build_document_tree.delay(str(doc.id))
+        rag_mode = kb.settings.get("rag_mode", "pageindex") if kb.settings else "pageindex"
+        if rag_mode == "vector":
+            from app.workers.index_tasks import index_document
+            index_document.delay(str(doc.id), kb.settings)
+        else:
+            from app.workers.tree_tasks import build_document_tree
+            build_document_tree.delay(str(doc.id))
     except Exception as exc:
-        logger.error("Failed to enqueue build_document_tree task", extra={"doc_id": str(doc.id), "error": str(exc)})
+        logger.error("Failed to enqueue indexing task", extra={"doc_id": str(doc.id), "error": str(exc)})
         # Don't fail the request — task can be retried manually
 
     logger.info("Document uploaded", extra={"doc_id": str(doc.id), "kb_id": str(kb_id)})

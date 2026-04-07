@@ -18,3 +18,5 @@ python-docx
 httpx
 python-magic
 deepeval>=1.0.0
+pgvector>=0.3.0
+openai>=1.0.0

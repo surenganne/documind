@@ -9,6 +9,8 @@ from app.models.document_session_link import DocumentSessionLink
 from app.models.eval_result import EvalResult
 from app.models.eval_config import EvalConfig
 from app.models.audit_log import AuditLog
+from app.models.document_chunk import DocumentChunk
+from app.models.model_provider import ModelProviderConfig
 
 __all__ = [
     "Workspace",
@@ -24,4 +26,6 @@ __all__ = [
     "EvalResult",
     "EvalConfig",
     "AuditLog",
+    "DocumentChunk",
+    "ModelProviderConfig",
 ]
