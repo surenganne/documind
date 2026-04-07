@@ -69,6 +69,8 @@ services:
         sleep 5 &&
         echo 'Running migrations...' &&
         alembic upgrade head &&
+        echo 'Seeding default admin user...' &&
+        python seed_admin.py &&
         echo 'Starting backend server...' &&
         uvicorn app.main:app --host 0.0.0.0 --port 8010 --reload
       "
