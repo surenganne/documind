@@ -37,7 +37,6 @@ def upgrade() -> None:
         sa.Column('page_number', sa.Integer(), nullable=False, server_default='1'),
         sa.Column('parent_chunk_id', postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column('chunk_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default='{}'),
-        sa.Column('embedding', sa.NullType(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('NOW()')),
         sa.ForeignKeyConstraint(['document_id'], ['documents.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['kb_id'], ['knowledge_bases.id'], ondelete='CASCADE'),
@@ -46,8 +45,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
     )
 
-    # Override the embedding column with native vector type (since SQLAlchemy doesn't know it natively)
-    op.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(1536) USING NULL::vector(1536)")
+    # Add vector column via raw SQL (SQLAlchemy has no native vector type)
+    op.execute("ALTER TABLE document_chunks ADD COLUMN embedding vector(1536)")
 
     # Indexes for document_chunks
     op.execute("CREATE INDEX ON document_chunks (kb_id, workspace_id)")
