@@ -13,12 +13,8 @@ from celery.exceptions import MaxRetriesExceededError
 from app.workers.celery_app import celery_app
 from app.core.database import AsyncSessionLocal
 from app.services.document.extractor import extract_text
-from app.services.llm.bedrock import BedrockProvider
 
 logger = logging.getLogger(__name__)
-
-# Bedrock model IDs - using cross-region inference profile for us-east-1
-_CLAUDE_MODEL = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 
 # Retry policy: 2^attempt * 10s → 10s, 20s, 40s
 _MAX_RETRIES = 3
@@ -99,8 +95,9 @@ async def _build_tree_async(document_id: str) -> dict:
             # Extract text
             text = extract_text(doc.file_path, doc.file_type)
 
-            # Build tree and insights in a single LLM call (faster!)
-            provider = BedrockProvider(model=_CLAUDE_MODEL)
+            # Resolve LLM provider from workspace config (falls back to Bedrock)
+            from app.services.llm.factory import get_llm_provider
+            provider = await get_llm_provider(doc.workspace_id, db)
             tree_json, insights = await _generate_tree_and_insights(provider, text, doc.filename)
 
             # Persist tree
@@ -113,7 +110,7 @@ async def _build_tree_async(document_id: str) -> dict:
                 doc_tree = DocumentTree(
                     document_id=doc_uuid,
                     tree_json=tree_json,
-                    llm_model_used=_CLAUDE_MODEL,
+                    llm_model_used=provider.model,
                     token_count=0,
                     **insights,
                 )

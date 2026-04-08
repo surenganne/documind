@@ -23,7 +23,7 @@ from app.models.document_tree import DocumentTree
 from app.models.knowledge_base import KnowledgeBase
 from app.models.user import User
 from app.schemas.chat import ChatMessageCreate, ChatMessageOut, ChatSessionCreate, ChatSessionOut
-from app.services.llm.bedrock import BedrockProvider
+from app.services.llm.factory import get_llm_provider
 from app.services.pageindex.answer_generator import generate_answer, stream_answer
 from app.services.pageindex.trace_logger import build_trace
 from app.services.pageindex.tree_navigator import navigate
@@ -241,7 +241,7 @@ async def send_message(
     kb = kb_result.scalar_one()
     rag_mode = (kb.settings or {}).get("rag_mode", "pageindex")
 
-    llm = BedrockProvider()
+    llm = await get_llm_provider(current_user.workspace_id, db)
 
     if rag_mode == "vector":
         # Vector RAG path
@@ -266,6 +266,39 @@ async def send_message(
         node_ids_visited = [c.node_id for c in answer.citations]
 
         # Store assistant message
+        assistant_msg = ChatMessage(
+            session_id=session_id,
+            role="assistant",
+            content=answer.content,
+            citations=[c.to_dict() for c in answer.citations],
+            reasoning_trace=reasoning_trace_data,
+            node_ids_visited=node_ids_visited,
+        )
+    elif rag_mode == "wiki":
+        # Wiki RAG path — query the LLM-maintained wiki pages
+        from sqlalchemy import select as sa_select
+        from app.models.wiki_page import WikiPage
+        from app.services.wiki.wiki_navigator import navigate_wiki
+        from app.services.wiki.wiki_answer_generator import generate_answer_from_wiki
+
+        wiki_result = await db.execute(
+            sa_select(WikiPage)
+            .where(WikiPage.kb_id == session.kb_id)
+            .order_by(WikiPage.title)
+        )
+        wiki_pages = wiki_result.scalars().all()
+        nav_result = await navigate_wiki(body.content, wiki_pages, llm)
+        selected_pages = [p for p in wiki_pages if str(p.id) in nav_result.selected_page_ids]
+        answer = await generate_answer_from_wiki(body.content, selected_pages, history, llm)
+
+        reasoning_trace_data = {
+            "mode": "wiki",
+            "pages_retrieved": len(selected_pages),
+            "rationale": nav_result.rationale,
+            "confidence": nav_result.confidence,
+        }
+        node_ids_visited = nav_result.selected_page_ids
+
         assistant_msg = ChatMessage(
             session_id=session_id,
             role="assistant",
@@ -331,7 +364,7 @@ async def send_message(
 
     logger.info(
         "Chat message processed",
-        extra={"session_id": str(session_id), "nodes_visited": len(trace.node_ids)},
+        extra={"session_id": str(session_id), "nodes_visited": len(assistant_msg.node_ids_visited or [])},
     )
 
     return ChatMessageOut.model_validate(assistant_msg)
@@ -398,7 +431,7 @@ async def _ws_stream_answer(
     kb: KnowledgeBase | None = None,
 ) -> tuple[str, list, dict, list[str]]:
     """Run RAG pipeline and stream tokens over WebSocket. Returns (content, citations, trace_dict, node_ids)."""
-    llm = BedrockProvider()
+    llm = await get_llm_provider(user.workspace_id, db)
 
     # Check rag_mode
     rag_mode = (kb.settings or {}).get("rag_mode", "pageindex") if kb else "pageindex"
@@ -426,7 +459,44 @@ async def _ws_stream_answer(
 
         await websocket.send_json({"type": "trace", "data": trace_dict})
 
-        # Stream answer text in chunks
+        chunk_size = 5
+        for i in range(0, len(answer.content), chunk_size):
+            tok = answer.content[i:i + chunk_size]
+            await websocket.send_json({"type": "token", "data": tok})
+
+        await websocket.send_json({
+            "type": "done",
+            "citations": [c.to_dict() for c in answer.citations],
+        })
+
+        return answer.content, answer.citations, trace_dict, node_ids
+
+    elif rag_mode == "wiki":
+        from sqlalchemy import select as sa_select
+        from app.models.wiki_page import WikiPage
+        from app.services.wiki.wiki_navigator import navigate_wiki
+        from app.services.wiki.wiki_answer_generator import generate_answer_from_wiki
+
+        wiki_result = await db.execute(
+            sa_select(WikiPage)
+            .where(WikiPage.kb_id == session.kb_id)
+            .order_by(WikiPage.title)
+        )
+        wiki_pages = wiki_result.scalars().all()
+        nav_result = await navigate_wiki(query, wiki_pages, llm)
+        selected_pages = [p for p in wiki_pages if str(p.id) in nav_result.selected_page_ids]
+        answer = await generate_answer_from_wiki(query, selected_pages, history, llm)
+
+        trace_dict = {
+            "mode": "wiki",
+            "pages_retrieved": len(selected_pages),
+            "rationale": nav_result.rationale,
+            "confidence": nav_result.confidence,
+        }
+        node_ids = nav_result.selected_page_ids
+
+        await websocket.send_json({"type": "trace", "data": trace_dict})
+
         chunk_size = 5
         for i in range(0, len(answer.content), chunk_size):
             tok = answer.content[i:i + chunk_size]

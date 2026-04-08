@@ -105,6 +105,7 @@ async def build_test_case(message_id: str | uuid.UUID, db_session: Any) -> Any:
 
         tree_map: dict[str, dict] = {str(t.document_id): t.tree_json for t in trees}
 
+        unresolved_ids: list[str] = []
         for nid in node_ids:
             text: str | None = None
             if "::" in nid:
@@ -113,7 +114,7 @@ async def build_test_case(message_id: str | uuid.UUID, db_session: Any) -> Any:
                 if tree:
                     text = _extract_node_text(tree, nid)
             else:
-                # Try all trees
+                # Try all trees (PageIndex path)
                 for tree in tree_map.values():
                     text = _extract_node_text(tree, nid)
                     if text:
@@ -121,6 +122,20 @@ async def build_test_case(message_id: str | uuid.UUID, db_session: Any) -> Any:
 
             if text:
                 retrieval_context.append(text)
+            else:
+                unresolved_ids.append(nid)
+
+        # Vector RAG path: node_ids are DocumentChunk UUIDs — look them up directly
+        if unresolved_ids:
+            chunk_uuids = [uuid.UUID(nid) for nid in unresolved_ids if _is_valid_uuid(nid)]
+            if chunk_uuids:
+                from app.models.document_chunk import DocumentChunk
+                chunks_result = await db_session.execute(
+                    select(DocumentChunk).where(DocumentChunk.id.in_(chunk_uuids))
+                )
+                for chunk in chunks_result.scalars().all():
+                    if chunk.text:
+                        retrieval_context.append(chunk.text)
 
     try:
         import sys

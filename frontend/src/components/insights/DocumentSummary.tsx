@@ -158,6 +158,14 @@ export function DocumentSummary({ docId }: DocumentSummaryProps) {
 
   if (!data) return null;
 
+  if (data.rag_mode !== 'pageindex') {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
+        Insights are not available for Vector RAG documents in this view.
+      </div>
+    );
+  }
+
   const bullets = data.executive_summary ? parseBullets(data.executive_summary) : [];
   const entities: KeyEntities = data.key_entities ?? {};
 

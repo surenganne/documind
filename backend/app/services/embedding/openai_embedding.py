@@ -8,7 +8,7 @@ from app.services.embedding.provider import EmbeddingResult
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MODEL = "text-embedding-3-small"
-_DIMENSIONS = 1536
+_DIMENSIONS = 1024  # Match Bedrock Titan Embed v2 max; OpenAI text-embedding-3-small supports truncation
 
 
 class OpenAIEmbeddingProvider:
@@ -35,6 +35,7 @@ class OpenAIEmbeddingProvider:
         response = await self._client.embeddings.create(
             input=texts,
             model=self.model_id,
+            dimensions=_DIMENSIONS,
         )
         embeddings = [item.embedding for item in response.data]
         total_tokens = response.usage.total_tokens if response.usage else len(texts) * 100

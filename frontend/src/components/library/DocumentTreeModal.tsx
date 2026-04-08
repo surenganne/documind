@@ -51,6 +51,10 @@ export function DocumentTreeModal({ document, onClose }: DocumentTreeModalProps)
 
     fetchDocumentInsights(document.id)
       .then((insights) => {
+        if (insights.rag_mode !== 'pageindex') {
+          setLoading(false);
+          return;
+        }
         // tree_json may be null, an empty object, or a valid tree
         const raw = insights.tree_json as Record<string, unknown> | null | undefined;
         

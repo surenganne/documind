@@ -6,4 +6,5 @@ celery_app.autodiscover_tasks([
     "app.workers.eval_tasks",
     "app.workers.maintenance_tasks",
     "app.workers.index_tasks",
+    "app.workers.wiki_tasks",
 ])

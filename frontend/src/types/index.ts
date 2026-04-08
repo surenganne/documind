@@ -43,10 +43,11 @@ export interface Document {
   size_bytes: number;
   status: DocumentStatus;
   created_at: string;
+  chunk_count?: number | null;
 }
 
 export interface KBSettings {
-  rag_mode: 'pageindex' | 'vector';
+  rag_mode: 'pageindex' | 'vector' | 'wiki';
   index_method?: 'high_quality' | 'economical' | 'hybrid';
   chunk_strategy?: 'recursive' | 'parent_child';
   chunk_size?: number;
@@ -68,7 +69,26 @@ export interface KnowledgeBase {
   document_count: number;
   created_at: string;
   settings?: KBSettings;
-  rag_mode?: 'pageindex' | 'vector'; // derived from settings by backend
+  rag_mode?: 'pageindex' | 'vector' | 'wiki'; // derived from settings by backend
+}
+
+export interface WikiPage {
+  id: string;
+  kb_id: string;
+  title: string;
+  summary: string | null;
+  page_type: 'entity' | 'concept' | 'process' | 'event' | 'general';
+  source_doc_count: number;
+  related_titles: string[];
+  updated_at: string;
+}
+
+export interface WikiPageDetail extends WikiPage {
+  content: string;
+  source_doc_ids: string[];
+  workspace_id: string;
+  llm_model_used: string | null;
+  created_at: string;
 }
 
 export interface ModelProviderConfig {

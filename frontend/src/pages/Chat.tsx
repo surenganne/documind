@@ -1,23 +1,17 @@
-import { AnimatePresence, motion } from 'framer-motion';
-import { BookOpen, FileText, Plus, Send, Trash2, X } from 'lucide-react';
+import { BookOpen, Plus, Send, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { StreamingIndicator } from '../components/chat/StreamingIndicator';
-import { PDFViewer } from '../components/viewer/PDFViewer';
-import { SectionJumper } from '../components/viewer/SectionJumper';
 import { useChat } from '../hooks/useChat';
 import { useDocuments } from '../hooks/useDocuments';
-import { useUIStore } from '../stores/uiStore';
 
 export function Chat() {
   const { sessions, activeSessionId, messages, isStreaming, streamingContent, loadSessions, createSession, sendMessage, setActiveSession, deleteSession } = useChat();
   const { knowledgeBases, documents, loadKnowledgeBases, loadDocuments } = useDocuments();
-  const { pdfViewerDocId, pdfViewerPage, pdfViewerHighlight, setPdfDoc, setPdfPage, setPdfHighlight } = useUIStore();
+  const navigate = useNavigate();
 
   const [input, setInput] = useState('');
-  const [jumpDoc, setJumpDoc] = useState<string | null>(null);
-  const [jumpPage, setJumpPage] = useState<number | null>(null);
-  const [pdfDrawerOpen, setPdfDrawerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,22 +48,14 @@ export function Chat() {
   };
 
   const handleCitationClick = (docId: string, page: number, excerpt?: string) => {
-    setJumpDoc(docId);
-    setJumpPage(page);
-    setPdfDoc(docId);
-    setPdfPage(page);
-    setPdfHighlight(excerpt ?? null);
-    setPdfDrawerOpen(true);
+    const params = new URLSearchParams({ from: '/chat' });
+    if (page > 1) params.set('page', String(page));
+    if (excerpt) params.set('highlight', excerpt);
+    navigate(`/documents/${docId}?${params.toString()}`);
   };
-
-  // Build PDF URL from doc ID
-  const pdfUrl = pdfViewerDocId
-    ? `/api/v1/documents/${pdfViewerDocId}/file`
-    : null;
 
   return (
     <div className="flex h-full overflow-hidden">
-      <SectionJumper docId={jumpDoc} page={jumpPage} />
 
       {/* Left panel — 280px */}
       <aside className="w-[280px] shrink-0 flex flex-col border-r border-slate-200 bg-slate-50">
@@ -105,25 +91,6 @@ export function Chat() {
             )}
           </div>
         </div>
-
-        {/* Document library for active KB */}
-        {activeSession && (
-          <div className="border-b border-slate-200 p-4 flex-1 overflow-y-auto">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Documents</p>
-            <div className="flex flex-col gap-1">
-              {kbDocuments.map((doc) => (
-                <button
-                  key={doc.id}
-                  onClick={() => handleCitationClick(doc.id, 1)}
-                  className="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-left text-xs text-slate-700 hover:bg-white hover:shadow-sm transition-all"
-                >
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--dm-primary)]" />
-                  <span className="truncate font-medium">{doc.filename}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Session navigator */}
         <div className="p-4 overflow-y-auto">
@@ -253,61 +220,6 @@ export function Chat() {
         )}
       </main>
 
-      {/* Right panel — PDF drawer */}
-      <AnimatePresence>
-        {pdfDrawerOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              key="pdf-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/30 z-40"
-              onClick={() => setPdfDrawerOpen(false)}
-              aria-hidden="true"
-            />
-
-            {/* Drawer */}
-            <motion.aside
-              key="pdf-drawer"
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 h-full w-full max-w-[800px] z-50 flex flex-col bg-white shadow-2xl border-l border-slate-200"
-              role="dialog"
-              aria-modal="true"
-              aria-label="PDF viewer"
-            >
-              {/* Drawer header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0 bg-slate-50">
-                <span className="text-sm font-semibold text-slate-900">
-                  Document Viewer
-                </span>
-                <button
-                  onClick={() => setPdfDrawerOpen(false)}
-                  className="rounded-lg p-2 text-slate-400 hover:text-slate-700 hover:bg-white transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dm-primary)]"
-                  aria-label="Close PDF viewer"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* PDF viewer fills remaining height */}
-              <div className="flex-1 overflow-hidden">
-                <PDFViewer
-                  url={pdfUrl}
-                  currentPage={pdfViewerPage}
-                  highlight={pdfViewerHighlight ?? undefined}
-                  onPageChange={setPdfPage}
-                />
-              </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

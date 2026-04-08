@@ -17,6 +17,7 @@ celery_app.conf.update(
     task_routes={
         "app.workers.tree_tasks.*": {"queue": "default"},
         "app.workers.index_tasks.*": {"queue": "default"},
+        "app.workers.wiki_tasks.*": {"queue": "default"},
         "app.workers.eval_tasks.*": {"queue": "eval_queue"},
         "app.workers.maintenance_tasks.*": {"queue": "default"},
     },

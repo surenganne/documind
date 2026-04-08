@@ -1,13 +1,12 @@
 import { BookOpen } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { DocumentTreeModal } from '../components/library/DocumentTreeModal';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DocumentCard } from '../components/upload/DocumentCard';
 import { useDocuments } from '../hooks/useDocuments';
-import type { Document } from '../types';
 
 export function Library() {
   const { knowledgeBases, documents, loadKnowledgeBases, loadDocuments } = useDocuments();
-  const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadKnowledgeBases();
@@ -41,9 +40,9 @@ export function Library() {
                 {kbDocs.map((doc) => (
                   <button
                     key={doc.id}
-                    onClick={() => setSelectedDoc(doc)}
+                    onClick={() => navigate(`/documents/${doc.id}?from=/library`)}
                     className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dm-primary)] rounded-xl"
-                    aria-label={`View tree for ${doc.filename}`}
+                    aria-label={`View document ${doc.filename}`}
                   >
                     <DocumentCard document={doc} />
                   </button>
@@ -54,10 +53,6 @@ export function Library() {
         );
       })}
 
-      <DocumentTreeModal
-        document={selectedDoc}
-        onClose={() => setSelectedDoc(null)}
-      />
     </div>
   );
 }

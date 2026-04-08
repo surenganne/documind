@@ -13,7 +13,7 @@ from app.services.embedding.provider import EmbeddingResult
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MODEL = "amazon.titan-embed-text-v2:0"
-_DIMENSIONS = 1536
+_DIMENSIONS = 1024  # Titan Embed v2 supports 256, 512, 1024 only
 
 
 def _build_bedrock_client(region: str):
@@ -46,7 +46,6 @@ class BedrockEmbeddingProvider:
         body = json.dumps({
             "inputText": text,
             "dimensions": _DIMENSIONS,
-            "normalize": True,
         })
         response = self._client.invoke_model(
             modelId=self.model_id,

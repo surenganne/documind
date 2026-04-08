@@ -45,7 +45,7 @@ class DocumentChunk(Base):
     )
     chunk_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
     embedding: Mapped[Optional[list]] = mapped_column(
-        Vector(1536) if _VECTOR_AVAILABLE else Text(),  # type: ignore[arg-type]
+        Vector(1024) if _VECTOR_AVAILABLE else Text(),  # type: ignore[arg-type]
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

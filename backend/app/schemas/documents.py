@@ -25,5 +25,6 @@ class DocumentOut(BaseModel):
     status: DocumentStatus
     uploaded_by: uuid.UUID
     created_at: datetime
+    chunk_count: Optional[int] = None
 
     model_config = {"from_attributes": True}

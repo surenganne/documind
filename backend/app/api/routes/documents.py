@@ -199,6 +199,9 @@ async def upload_document(
         if rag_mode == "vector":
             from app.workers.index_tasks import index_document
             index_document.delay(str(doc.id), kb.settings)
+        elif rag_mode == "wiki":
+            from app.workers.wiki_tasks import build_wiki_pages
+            build_wiki_pages.delay(str(doc.id))
         else:
             from app.workers.tree_tasks import build_document_tree
             build_document_tree.delay(str(doc.id))
@@ -223,11 +226,34 @@ async def list_documents(
     db: AsyncSession = Depends(get_db),
 ):
     """List documents in the current workspace, optionally filtered by kb_id."""
+    from sqlalchemy import func
+    from app.models.document_chunk import DocumentChunk
+
     query = select(Document).where(Document.workspace_id == current_user.workspace_id)
     if kb_id is not None:
         query = query.where(Document.kb_id == kb_id)
     result = await db.execute(query.order_by(Document.created_at.desc()))
-    return result.scalars().all()
+    docs = result.scalars().all()
+
+    # Fetch chunk counts for all docs in one query
+    if docs:
+        doc_ids = [d.id for d in docs]
+        chunk_count_result = await db.execute(
+            select(DocumentChunk.document_id, func.count(DocumentChunk.id).label("cnt"))
+            .where(DocumentChunk.document_id.in_(doc_ids))
+            .group_by(DocumentChunk.document_id)
+        )
+        chunk_counts = {str(row.document_id): row.cnt for row in chunk_count_result.all()}
+    else:
+        chunk_counts = {}
+
+    # Build response with chunk_count attached
+    out = []
+    for doc in docs:
+        doc_out = DocumentOut.model_validate(doc)
+        doc_out.chunk_count = chunk_counts.get(str(doc.id))
+        out.append(doc_out)
+    return out
 
 
 @router.get("/{doc_id}", response_model=DocumentOut)
