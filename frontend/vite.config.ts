@@ -11,6 +11,9 @@ export default defineConfig({
   },
   server: {
     port: 5180,
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    },
     proxy: {
       '/api': {
         target: 'http://backend:8010',
