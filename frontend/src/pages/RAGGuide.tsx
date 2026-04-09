@@ -48,14 +48,73 @@ function Example({ title, query, why }: { title: string; query: string; why: str
 }
 
 // ── Comparison table ──────────────────────────────────────────────────────────
-function ComparisonRow({ aspect, pageindex, vector, wiki }: { aspect: string; pageindex: string; vector: string; wiki: string }) {
+const COMPARISON_ROWS = [
+  {
+    aspect: 'Ingest cost',
+    pageindex: { text: 'Medium', sub: '1 LLM call/doc', level: 1 },
+    vector:    { text: 'Low',    sub: 'embeddings only', level: 0 },
+    wiki:      { text: 'High',   sub: 'LLM per page, per doc', level: 2 },
+  },
+  {
+    aspect: 'Query cost',
+    pageindex: { text: 'Medium', sub: '2 LLM calls', level: 1 },
+    vector:    { text: 'Low',    sub: 'embedding + retrieval', level: 0 },
+    wiki:      { text: 'Medium', sub: '2 LLM calls', level: 1 },
+  },
+  {
+    aspect: 'Cross-doc synthesis',
+    pageindex: { text: 'Limited',   sub: 'tree per doc', level: 0 },
+    vector:    { text: 'Moderate',  sub: 'chunks mixed', level: 1 },
+    wiki:      { text: 'Excellent', sub: 'pages merged', level: 2 },
+  },
+  {
+    aspect: 'Best for',
+    pageindex: { text: 'Long, structured docs',     sub: '', level: -1 },
+    vector:    { text: 'Large, growing collections', sub: '', level: -1 },
+    wiki:      { text: 'Evolving topic libraries',   sub: '', level: -1 },
+  },
+  {
+    aspect: 'Answer style',
+    pageindex: { text: 'Deep, section-level',   sub: '', level: -1 },
+    vector:    { text: 'Snippet-level, broad',  sub: '', level: -1 },
+    wiki:      { text: 'Encyclopedic, curated', sub: '', level: -1 },
+  },
+  {
+    aspect: 'Knowledge accumulation',
+    pageindex: { text: 'No',  sub: 'per-doc', level: 0 },
+    vector:    { text: 'No',  sub: 'per-doc', level: 0 },
+    wiki:      { text: 'Yes', sub: 'pages merge', level: 2 },
+  },
+  {
+    aspect: 'Setup complexity',
+    pageindex: { text: 'Low',    sub: '', level: 0 },
+    vector:    { text: 'Medium', sub: 'embedding model', level: 1 },
+    wiki:      { text: 'Low',    sub: '', level: 0 },
+  },
+];
+
+const LEVEL_STYLES: Record<number, string> = {
+  0: 'bg-green-50 text-green-700 border border-green-200',
+  1: 'bg-amber-50 text-amber-700 border border-amber-200',
+  2: 'bg-red-50 text-red-600 border border-red-200',
+};
+
+function GlanceCell({ text, sub, level }: { text: string; sub: string; level: number }) {
+  if (level === -1) {
+    return (
+      <div className="text-xs text-slate-600 leading-snug">
+        {text}
+        {sub && <span className="block text-slate-400 text-[11px]">{sub}</span>}
+      </div>
+    );
+  }
   return (
-    <tr className="border-b border-slate-100 last:border-0">
-      <td className="py-2.5 pr-4 text-xs font-medium text-slate-600 whitespace-nowrap">{aspect}</td>
-      <td className="py-2.5 pr-4 text-xs text-slate-600">{pageindex}</td>
-      <td className="py-2.5 pr-4 text-xs text-slate-600">{vector}</td>
-      <td className="py-2.5 text-xs text-slate-600">{wiki}</td>
-    </tr>
+    <div className="flex flex-col gap-0.5">
+      <span className={`inline-flex w-fit items-center rounded-md px-2 py-0.5 text-xs font-semibold ${LEVEL_STYLES[level]}`}>
+        {text}
+      </span>
+      {sub && <span className="text-[11px] text-slate-400 leading-tight">{sub}</span>}
+    </div>
   );
 }
 
@@ -83,32 +142,88 @@ export function RAGGuide() {
 
       {/* Quick comparison */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-            <Layers className="h-4 w-4 text-slate-400" />
-            At a Glance
-          </h2>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <Layers className="h-4 w-4 text-slate-400" />
+          <h2 className="text-sm font-semibold text-slate-800">At a Glance</h2>
         </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full px-5">
+          <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-100">
-                <th className="py-3 px-5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide"></th>
-                <th className="py-3 pr-4 text-left text-xs font-semibold text-blue-600 uppercase tracking-wide">PageIndex</th>
-                <th className="py-3 pr-4 text-left text-xs font-semibold text-emerald-600 uppercase tracking-wide">Vector RAG</th>
-                <th className="py-3 text-left text-xs font-semibold text-violet-600 uppercase tracking-wide">Wiki</th>
+              <tr>
+                <th className="w-[180px] px-5 py-4" />
+                {/* PageIndex */}
+                <th className="px-4 py-4 text-left">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100">
+                      <FileSearch className="h-3.5 w-3.5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">PageIndex</p>
+                      <p className="text-[11px] text-slate-400 font-normal">Vectorless</p>
+                    </div>
+                  </div>
+                </th>
+                {/* Vector RAG */}
+                <th className="px-4 py-4 text-left">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100">
+                      <Search className="h-3.5 w-3.5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Vector RAG</p>
+                      <p className="text-[11px] text-slate-400 font-normal">Semantic Search</p>
+                    </div>
+                  </div>
+                </th>
+                {/* Wiki */}
+                <th className="px-4 py-4 text-left">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100">
+                      <BookOpen className="h-3.5 w-3.5 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-violet-700 uppercase tracking-wide">Wiki</p>
+                      <p className="text-[11px] text-slate-400 font-normal">Living KB</p>
+                    </div>
+                  </div>
+                </th>
+              </tr>
+              {/* Colored underline bars */}
+              <tr>
+                <td className="px-5 pb-1" />
+                <td className="px-4 pb-1"><div className="h-0.5 rounded-full bg-blue-400" /></td>
+                <td className="px-4 pb-1"><div className="h-0.5 rounded-full bg-emerald-400" /></td>
+                <td className="px-4 pb-1"><div className="h-0.5 rounded-full bg-violet-400" /></td>
               </tr>
             </thead>
-            <tbody className="px-5">
-              <ComparisonRow aspect="Ingest cost" pageindex="Medium (1 LLM call/doc)" vector="Low (embeddings only)" wiki="High (LLM per page, per doc)" />
-              <ComparisonRow aspect="Query cost" pageindex="Medium (2 LLM calls)" vector="Low (embedding + retrieval)" wiki="Medium (2 LLM calls)" />
-              <ComparisonRow aspect="Cross-doc synthesis" pageindex="Limited (tree per doc)" vector="Moderate (chunks mixed)" wiki="Excellent (pages merged)" />
-              <ComparisonRow aspect="Best for" pageindex="Long, structured docs" vector="Large, growing collections" wiki="Evolving topic libraries" />
-              <ComparisonRow aspect="Answer style" pageindex="Deep, section-level" vector="Snippet-level, broad" wiki="Encyclopedic, curated" />
-              <ComparisonRow aspect="Knowledge accumulation" pageindex="No (per-doc)" vector="No (per-doc)" wiki="Yes (pages merge)" />
-              <ComparisonRow aspect="Setup complexity" pageindex="Low" vector="Medium (embedding model)" wiki="Low" />
+            <tbody>
+              {COMPARISON_ROWS.map((row, i) => (
+                <tr key={row.aspect} className={i % 2 === 0 ? 'bg-slate-50/60' : 'bg-white'}>
+                  <td className="px-5 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">
+                    {row.aspect}
+                  </td>
+                  <td className="px-4 py-3">
+                    <GlanceCell {...row.pageindex} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <GlanceCell {...row.vector} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <GlanceCell {...row.wiki} />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Legend */}
+        <div className="px-5 py-3 border-t border-slate-100 flex items-center gap-4 bg-slate-50/50">
+          <span className="text-[11px] text-slate-400 font-medium">Legend:</span>
+          <span className="inline-flex items-center gap-1 text-[11px] text-green-700"><span className="h-2 w-2 rounded-sm bg-green-200 border border-green-300 inline-block" /> Low / Good</span>
+          <span className="inline-flex items-center gap-1 text-[11px] text-amber-700"><span className="h-2 w-2 rounded-sm bg-amber-200 border border-amber-300 inline-block" /> Medium</span>
+          <span className="inline-flex items-center gap-1 text-[11px] text-red-600"><span className="h-2 w-2 rounded-sm bg-red-200 border border-red-300 inline-block" /> High / Limited</span>
         </div>
       </div>
 
